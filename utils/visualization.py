@@ -152,27 +152,81 @@ def create_cumulative_chart(population: pd.DataFrame, sample: pd.DataFrame, valu
         logger.info(f"Збережено загальний кумулятивний графік: {output_path}")
 
 
-def create_umap_projection(population: pd.DataFrame, label_column: str, features: List[str], output_path: str, random_seed: int):
+def create_umap_projection(population: pd.DataFrame, label_column: str, cluster_column: str, features: List[str], output_path: str):
     population = population.copy()
+
+    # Проверка на наличие столбцов label_column и cluster_column
+    if label_column not in population.columns or cluster_column not in population.columns:
+        raise ValueError(
+            f"Columns '{label_column}' or '{cluster_column}' not found in the DataFrame")
+
+    # Убедимся, что колонка cluster не попала в features
+    if cluster_column in features:
+        raise ValueError(
+            f"Column '{cluster_column}' should not be in the features list")
+
+    print(f"Label column: {label_column}, Cluster column: {cluster_column}")
+
+    # Удаляем строки с пропущенными значениями в метках и кластерах
+    population = population.dropna(subset=[label_column, cluster_column])
+
     available_features = get_available_features(population, features)
+    print(f"Available features: {available_features}")
+
     feature_data = population[available_features]
+    print(f"Feature data shape: {feature_data.shape}")
 
-    reducer = umap.UMAP(n_components=2, random_state=random_seed)
+    # Если нет признаков для построения UMAP
+    if feature_data.empty:
+        raise ValueError("No features available for UMAP projection")
+
+    # UMAP без использования random_seed
+    reducer = umap.UMAP(n_components=2)
     embedding = reducer.fit_transform(feature_data)
+    print(f"UMAP embedding shape: {embedding.shape}")
 
+    # Извлекаем значения меток (label) и кластеров (cluster)
     labels = population[label_column].values
+    clusters = population[cluster_column].values
+
+    print(f"Labels shape: {labels.shape}, Clusters shape: {clusters.shape}")
+
+    # Создаем маски для label = 1 (черные точки) и label = 0 (кластерная раскраска)
+    mask_anomalies = labels == 1  # label = 1 (черные точки)
+    mask_clusters = labels == 0   # label = 0 (по кластерам)
+
+    print(
+        f"Mask anomalies shape: {mask_anomalies.shape}, Mask clusters shape: {mask_clusters.shape}")
+    print(
+        f"Anomalies count: {mask_anomalies.sum()}, Clustered count: {mask_clusters.sum()}")
 
     plt.figure(figsize=(10, 8))
 
-    scatter = plt.scatter(
-        embedding[:, 0], embedding[:, 1], c=labels, cmap='coolwarm', s=10, label=labels)
+    # Сначала рисуем точки с label = 0 (обычные точки) с раскраской по кластерам
+    if mask_clusters.sum() > 0:
+        print(f"Plotting clusters: {embedding[mask_clusters, 0].shape}")
+        scatter = plt.scatter(
+            embedding[mask_clusters, 0], embedding[mask_clusters, 1],
+            c=clusters[mask_clusters], cmap='viridis', s=10, alpha=0.7, label='Clustered (label=0)')
 
-    plt.colorbar(scatter, ticks=[0, 1], label=label_column)
+        # Добавляем цветовую легенду для кластеров
+        plt.colorbar(scatter, label=cluster_column)
 
-    plt.title(f'UMAP Projection (colored by {label_column})')
+    # Затем рисуем точки с label = 1 (аномалии) поверх остальных
+    if mask_anomalies.sum() > 0:
+        print(f"Plotting anomalies: {embedding[mask_anomalies, 0].shape}")
+        plt.scatter(
+            embedding[mask_anomalies, 0], embedding[mask_anomalies, 1],
+            facecolor='white', edgecolor='black', label='Anomalies (label=1)',
+            s=100, linewidth=1.5, alpha=1.0)
+
+    # Оформление графика
+    plt.title(
+        f'UMAP Projection (colored by {cluster_column}, anomalies in black)')
     plt.xlabel('UMAP 1')
     plt.ylabel('UMAP 2')
 
+    # Сохраняем изображение
     plt.savefig(output_path)
     plt.close()
 

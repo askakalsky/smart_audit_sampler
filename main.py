@@ -5,13 +5,13 @@ import logging
 import datetime
 import uuid
 
+
 # Data manipulation and analysis
 import numpy as np
 import pandas as pd
 
 # Machine learning
 from sklearn.exceptions import NotFittedError
-import torch.multiprocessing as mp
 
 # Visualization
 import matplotlib.pyplot as plt
@@ -51,8 +51,6 @@ from utils.preprocessing import preprocess_data
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
-
-mp.set_start_method('spawn')
 
 
 class SamplingApp:
@@ -456,13 +454,13 @@ class SamplingApp:
                         "Передобробка даних не виконана. Натисніть 'Вказати типи колонок' та збережіть вибір.")
                 features = self.numerical_columns + self.categorical_columns
                 if choice == 5:
-                    population_with_results, population_for_chart, sample, method_description, best_study = isolation_forest_sampling(
+                    population_with_results, population_for_chart, sample, method_description = isolation_forest_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 6:
-                    population_with_results, population_for_chart, sample, method_description, best_study = lof_sampling(
+                    population_with_results, population_for_chart, sample, method_description = lof_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 7:
-                    population_with_results, population_for_chart, sample, method_description = kmeans_sampling(
+                    population_with_results, population_for_chart, sample, method_description, best_study = kmeans_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 8:
                     population_with_results, population_for_chart, sample, method_description, best_study = autoencoder_sampling(
@@ -526,16 +524,16 @@ class SamplingApp:
                     cumulative_chart_path
                 )
 
-            if choice in (5, 6, 7, 8, 9):
+            if choice in (5, 6, 7, 9):
                 umap_projection_path = f"{file_name}_{sample_type}_umap_projection.png"
                 create_umap_projection(
                     population_for_chart,
                     'is_sample',
+                    'cluster',
                     features,
-                    umap_projection_path,
-                    random_seed
+                    umap_projection_path
                 )
-            if choice in (5, 6, 7, 8, 9):
+            if choice in (7, 8, 9):
                 optuna_results_path = f"{file_name}_{sample_type}"
                 visualize_optuna_results(best_study, optuna_results_path)
 

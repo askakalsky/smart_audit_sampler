@@ -3,9 +3,9 @@ import optuna
 from typing import Tuple, List
 import numpy as np
 import logging
-from hdbscan import HDBSCAN
+from sklearn.cluster import HDBSCAN
 import datetime
-from scoring_methods.silhouette import calculate_silhouette_hdbscan
+from scoring_methods.silhouette import calculate_silhouette
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG,
@@ -17,7 +17,7 @@ def hdbscan_sampling(
     population_original: pd.DataFrame,
     population: pd.DataFrame,
     sample_size: int,
-    features: List[str],
+    features: List[str],  # Используется только для документации
     random_seed: int
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
     """
@@ -29,7 +29,7 @@ def hdbscan_sampling(
         population_original (pd.DataFrame): Original DataFrame to be processed and annotated with cluster information.
         population (pd.DataFrame): A copy of the original DataFrame used for clustering and anomaly detection.
         sample_size (int): The desired number of anomalies to sample.
-        features (List[str]): The list of feature columns used for clustering.
+        features (List[str]): The list of feature columns used for clustering (only for documentation).
         random_seed (int): Seed for random number generation to ensure reproducibility.
 
     Returns:
@@ -80,7 +80,7 @@ def hdbscan_sampling(
                 'allow_single_cluster': False
             }
             clusterer = HDBSCAN(**params)
-            return calculate_silhouette_hdbscan(clusterer, population)
+            return calculate_silhouette(clusterer, population)
 
         # Run Optuna optimization
         study = optuna.create_study(direction='maximize')
@@ -118,8 +118,8 @@ def hdbscan_sampling(
             f"Sampling using HDBSCAN with automatic hyperparameter tuning (Optuna).\n"
             f"{warning_message}\n"
             f"Number of sampled anomalies: {len(sample_processed)}.\n"
-            f"Requested features: {features}.\n"
-            f"Used features: {population.columns.tolist()}.\n"
+            f"Used features: {features}.\n"
+            f"Table columns: {population.columns.tolist()}.\n"
             f"Best parameters: {best_params}.\n"
             f"Sample creation date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n"
             f"Random seed: {random_seed}.\n"

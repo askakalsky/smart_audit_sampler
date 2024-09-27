@@ -1,69 +1,19 @@
-import pandas as pd
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
-from torch.cuda.amp import autocast, GradScaler
-import numpy as np
-import optuna
-from typing import Optional, Tuple, List, Dict
-
-# Standard libraries
-import os
-import random
-import logging
-import datetime
-import uuid
-
-# Data manipulation and analysis
-import numpy as np
-import pandas as pd
-import dask.dataframe as dd
-
-# Machine learning
-from sklearn.ensemble import IsolationForest
-from sklearn.neighbors import LocalOutlierFactor
-from sklearn.cluster import KMeans, HDBSCAN
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.model_selection import GridSearchCV, cross_val_score, KFold
-from sklearn.metrics import silhouette_score, pairwise_distances_argmin_min, average_precision_score, mean_squared_error, calinski_harabasz_score
-from sklearn.decomposition import PCA
-from sklearn.exceptions import NotFittedError
-from skopt import BayesSearchCV
-
-# Deep learning
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, SubsetRandomSampler
-import torch.multiprocessing as mp
-from torch.cuda.amp import autocast, GradScaler
-
-# Visualization
-import matplotlib.pyplot as plt
-import plotly.io as pio
-import umap
-
-# GUI
-import tkinter as tk
-from tkinter import filedialog, ttk, messagebox
-
-# Optimization
-import optuna
-from optuna.samplers import TPESampler
-from optuna.pruners import MedianPruner
-import optuna.visualization as vis
-from optuna.importance import get_param_importances
-
-# Parallel processing
-from joblib import Parallel, delayed
-import joblib
-
-# Type hinting
-from typing import Optional, Tuple, List, Dict
-
-# Process control
 from tqdm import tqdm
+import joblib
+import optuna.visualization as vis
+from optuna.pruners import MedianPruner
+import torch
+import torch.optim as optim
+import torch.nn as nn
+import numpy as np
+import pandas as pd
+import logging
+from torch.cuda.amp import autocast, GradScaler
+from torch.utils.data import DataLoader, TensorDataset
+import optuna
+import copy  # Добавлено для копирования лучшей модели
+from typing import Optional, Tuple, List, Dict
+from sklearn.model_selection import KFold
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -73,7 +23,6 @@ logger = logging.getLogger(__name__)
 class Autoencoder(nn.Module):
     def __init__(self, input_dim: int, hidden_dim: int):
         super(Autoencoder, self).__init__()
-        # logger.debug(f"Initializing Autoencoder with input_dim={input_dim}, hidden_dim={hidden_dim}")
         self.encoder = nn.Sequential(
             nn.Linear(input_dim, hidden_dim),
             nn.ReLU(),
@@ -93,7 +42,6 @@ class Autoencoder(nn.Module):
 
 
 def create_dataloader(data, batch_size, shuffle=True):
-    # logger.debug(f"Creating DataLoader with batch_size={batch_size}, shuffle={shuffle}")
     return DataLoader(TensorDataset(torch.from_numpy(data.values).float()),
                       batch_size=batch_size, shuffle=shuffle, num_workers=0, pin_memory=True)
 
@@ -102,20 +50,8 @@ def create_and_train_model(trial, X_train, X_val, device, max_epochs=50):
     input_dim = X_train.shape[1]
     input_size = X_train.shape[0]
 
-    if input_size < 1000:
-        min_batch_size = 16
-    elif 1000 <= input_size < 5000:
-        min_batch_size = 32
-    elif 5000 <= input_size < 10000:
-        min_batch_size = 48
-    elif 10000 <= input_size < 30000:
-        min_batch_size = 64
-    elif 30000 <= input_size < 100000:
-        min_batch_size = 128
-    else:
-        min_batch_size = 256
-
-    max_batch_size = min_batch_size*2
+    min_batch_size = determine_batch_size(input_size)
+    max_batch_size = min_batch_size * 2
 
     hidden_dim = trial.suggest_int(
         'hidden_dim', int(input_dim * 0.5), int(input_dim * 1.25))
@@ -130,55 +66,61 @@ def create_and_train_model(trial, X_train, X_val, device, max_epochs=50):
     criterion = nn.MSELoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
     scaler = GradScaler()
+    use_amp = torch.cuda.is_available()
 
     train_loader = create_dataloader(X_train, batch_size)
     val_loader = create_dataloader(X_val, batch_size)
 
     best_val_loss = float('inf')
+    best_model = None  # Для сохранения наилучшей модели
     patience = 10
     for epoch in range(max_epochs):
         model.train()
         for batch in train_loader:
             inputs = batch[0].to(device)
             optimizer.zero_grad()
-            with autocast():
+            with autocast(enabled=use_amp):
                 outputs = model(inputs)
                 loss = criterion(outputs, inputs)
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+            if use_amp:
+                scaler.scale(loss).backward()
+                scaler.step(optimizer)
+                scaler.update()
+            else:
+                loss.backward()
+                optimizer.step()
 
         val_loss = evaluate_model(model, val_loader, criterion, device)
-        # logger.info(f"Epoch {epoch+1}/{max_epochs}, Validation Loss: {val_loss:.16f}")
 
         trial.report(val_loss, epoch)
         if trial.should_prune():
-            # logger.warning(f"Trial pruned at epoch {epoch+1}")
             raise optuna.TrialPruned()
 
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            best_model = copy.deepcopy(model)
             patience = 10
         else:
             patience -= 1
             if patience == 0:
-                # logger.info("Early stopping due to no improvement in validation loss.")
                 break
-    return model, best_val_loss
+
+    return best_model, best_val_loss
 
 
 def evaluate_model(model, dataloader, criterion, device):
     model.eval()
     total_loss = 0
+    use_amp = torch.cuda.is_available()
+
     with torch.no_grad():
         for batch in dataloader:
             inputs = batch[0].to(device)
-            with autocast():
+            with autocast(enabled=use_amp):
                 outputs = model(inputs)
                 loss = criterion(outputs, inputs)
             total_loss += loss.item() * inputs.size(0)
     mean_loss = total_loss / len(dataloader.dataset)
-    # logger.debug(f"Mean loss: {mean_loss:.16f}")
     return mean_loss
 
 
@@ -188,18 +130,10 @@ def objective_with_cv(trial, X, n_splits=3, device='cuda', random_seed=None):
     cv_scores = []
 
     for fold, (train_index, val_index) in enumerate(kf.split(X)):
-        # logger.debug(f"Fold {fold + 1}: Train indices: {train_index}, Validation indices: {val_index}")
-        # logger.debug(f"X shape: {X.shape}")
-
-        # Используем iloc для доступа к строкам
         X_train, X_val = X.iloc[train_index], X.iloc[val_index]
-
-        # logger.debug(f"Train set size: {X_train.shape}, Validation set size: {X_val.shape}")
-
         model, val_score = create_and_train_model(
             trial, X_train, X_val, device)
         cv_scores.append(val_score)
-        # logger.debug(f"Fold {fold + 1} validation score: {val_score:.16f}")
 
     mean_score = np.mean(cv_scores)
     logger.info(f"Cross-validation mean score: {mean_score:.16f}")
@@ -235,18 +169,23 @@ def compute_reconstruction_errors(model, data, device, batch_size=1024):
     model.eval()
     dataloader = create_dataloader(data, batch_size, shuffle=False)
     reconstruction_errors = []
+    use_amp = torch.cuda.is_available()
+
     with torch.no_grad():
         for batch in dataloader:
             inputs = batch[0].to(device)
-            with autocast():
+            with autocast(enabled=use_amp):
                 outputs = model(inputs)
                 errors = torch.mean((outputs - inputs) ** 2, dim=1)
             reconstruction_errors.extend(errors.cpu().numpy())
     return np.array(reconstruction_errors)
 
 
-def autoencoder_sampling(population_original: pd.DataFrame, population: pd.DataFrame,
-                         sample_size: int, features: List[str], random_seed: int) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
+def autoencoder_sampling(population_original: pd.DataFrame,
+                         population: pd.DataFrame,
+                         sample_size: int,
+                         features: List[str],
+                         random_seed: int) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
     try:
         logger.info(
             f"Starting autoencoder sampling with sample_size={sample_size}, random_seed={random_seed}")
@@ -254,47 +193,45 @@ def autoencoder_sampling(population_original: pd.DataFrame, population: pd.DataF
         np.random.seed(random_seed)
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        available_features = get_available_features(population, features)
-        logger.debug(f"Available features: {available_features}")
-        scaled_data = population[available_features]
+        scaled_data = population
 
-        # Используем подвыборку для оптимизации гиперпараметров
         subsample_size = min(100000, len(scaled_data))
         subsample_indices = np.random.choice(
             len(scaled_data), subsample_size, replace=False)
         subsample_data = scaled_data.iloc[subsample_indices]
-        logger.debug(f"Subsample size: {subsample_size}")
 
         best_params, best_value, best_study = optimize_autoencoder(
             subsample_data, random_seed=random_seed)
         logger.info(
             f"Best parameters: {best_params}, Best value: {best_value:.16f}")
 
-        # Обучение финальной модели на всем датасете
         final_model = Autoencoder(
-            len(available_features), best_params['hidden_dim']).to(device)
+            len(scaled_data.columns), best_params['hidden_dim']).to(device)
         optimizer = optim.Adam(final_model.parameters(),
                                lr=best_params['learning_rate'])
         criterion = nn.MSELoss()
         scaler = GradScaler()
+        use_amp = torch.cuda.is_available()
 
         full_train_loader = create_dataloader(
             scaled_data, batch_size=best_params['batch_size'])
 
-        for epoch in range(100):  # можно настроить количество эпох
+        for epoch in range(100):
             final_model.train()
             for batch in full_train_loader:
                 inputs = batch[0].to(device)
                 optimizer.zero_grad()
-                with autocast():
+                with autocast(enabled=use_amp):
                     outputs = final_model(inputs)
                     loss = criterion(outputs, inputs)
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            logger.debug(f"Final model training epoch {epoch+1}/100")
+                if use_amp:
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+                else:
+                    loss.backward()
+                    optimizer.step()
 
-        # Вычисление ошибок реконструкции
         reconstruction_errors = compute_reconstruction_errors(
             final_model, scaled_data, device)
 
@@ -311,7 +248,6 @@ def autoencoder_sampling(population_original: pd.DataFrame, population: pd.DataF
         population_original.loc[sample_processed.index, 'is_sample'] = True
         population.loc[sample_processed.index, 'is_sample'] = True
 
-        # Сохранение модели
         torch.save(final_model.state_dict(), 'autoencoder_model.pth')
         joblib.dump(scaler, 'scaler.joblib')
         logger.info(f"Model and scaler saved successfully.")
@@ -319,9 +255,8 @@ def autoencoder_sampling(population_original: pd.DataFrame, population: pd.DataF
         method_description = (
             f"Вибірка на основі Autoencoder з автоматичним підбором гіперпараметрів (Optuna).\n"
             f"Розмір вибірки: {sample_size}.\n"
-            f"Запитані ознаки: {features}.\n"
-            f"Використані параметри: {best_params}.\n"
             f"Найкраще значення цільової функції: {best_value}.\n"
+            f"Requested features: {features}.\n"
             f"Кількість аномалій: {len(sample_processed)}.\n"
             f"Дата та час створення вибірки: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}.\n"
             f"Випадкове зерно: {random_seed}.\n"
@@ -337,11 +272,16 @@ def autoencoder_sampling(population_original: pd.DataFrame, population: pd.DataF
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Unexpected error: {e}", None
 
 
-def get_available_features(population: pd.DataFrame, features: List[str]) -> List[str]:
-    available_features = [f for f in features if f in population.columns]
-    missing_features = set(features) - set(available_features)
-    for feature in missing_features:
-        related_columns = [
-            col for col in population.columns if col.startswith(f"{feature}_")]
-        available_features.extend(related_columns)
-    return list(dict.fromkeys(available_features))
+def determine_batch_size(input_size):
+    if input_size < 1000:
+        return 16
+    elif 1000 <= input_size < 5000:
+        return 32
+    elif 5000 <= input_size < 10000:
+        return 48
+    elif 10000 <= input_size < 30000:
+        return 64
+    elif 30000 <= input_size < 100000:
+        return 128
+    else:
+        return 256

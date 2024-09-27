@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-from sklearn.cluster import HDBSCAN
 from sklearn.metrics import silhouette_score
 from typing import List
 import logging
@@ -37,20 +36,18 @@ def define_sample_sizes(n_samples: int) -> List[int]:
         return [5000] * 3
 
 
-def compute_silhouette_scores(clusterer, data: pd.DataFrame, sample_sizes: List[int], available_features: List[str] = None, random_seed: int = None) -> float:
+def compute_silhouette_scores(clusterer, data: pd.DataFrame, sample_sizes: List[int], random_seed: int = None) -> float:
     """
-    Computes the silhouette scores for the given clusterer and data using subsampling.
+    Computes the silhouette scores for the given clusterer or anomaly detector and data using subsampling.
 
     Parameters:
     -----------
     clusterer : object
-        Clustering object that implements fit_predict or predict method.
+        Clustering or anomaly detection object that implements fit_predict or predict method.
     data : pd.DataFrame
-        Data to be clustered.
+        Data to be clustered or classified for outliers.
     sample_sizes : List[int]
         List of sample sizes for subsampling.
-    available_features : List[str], optional
-        List of feature names to use for clustering. If None, uses all features.
     random_seed : int, optional
         Seed for random number generation.
 
@@ -67,18 +64,22 @@ def compute_silhouette_scores(clusterer, data: pd.DataFrame, sample_sizes: List[
         try:
             sample_indices = rng.choice(n_samples, size=size, replace=False)
             sample = data.iloc[sample_indices]
-            if available_features is not None:
-                labels = clusterer.predict(data[available_features])
-                score = silhouette_score(
-                    sample[available_features], labels[sample_indices])
-            else:
+
+            # Check if clusterer has fit_predict or predict
+            if hasattr(clusterer, 'fit_predict'):
                 labels = clusterer.fit_predict(sample)
-                unique_labels = set(labels)
-                unique_labels.discard(-1)
-                if len(unique_labels) > 1:
-                    score = silhouette_score(sample, labels)
-                else:
-                    score = float('-inf')
+            elif hasattr(clusterer, 'predict'):
+                labels = clusterer.predict(sample)
+            else:
+                raise ValueError(
+                    f"Clusterer does not support 'fit_predict' or 'predict': {type(clusterer)}")
+
+            unique_labels = set(labels)
+            unique_labels.discard(-1)  # For HDBSCAN or outlier labels
+            if len(unique_labels) > 1:
+                score = silhouette_score(sample, labels)
+            else:
+                score = float('-inf')
             silhouette_scores.append(score)
         except ValueError:
             silhouette_scores.append(float('-inf'))
@@ -86,39 +87,17 @@ def compute_silhouette_scores(clusterer, data: pd.DataFrame, sample_sizes: List[
     return np.mean(silhouette_scores)
 
 
-def calculate_silhouette_hdbscan(clusterer: HDBSCAN, data: pd.DataFrame) -> float:
+def calculate_silhouette(clusterer, data: pd.DataFrame, random_seed: int = None) -> float:
     """
-    Calculates the silhouette score for a given HDBSCAN clusterer using subsampling.
+    Calculates the silhouette score for a given clustering or anomaly detection model using subsampling.
 
     Parameters:
     -----------
-    clusterer : HDBSCAN
-        HDBSCAN clustering object.
+    clusterer : object
+        Clustering or anomaly detection model that implements fit_predict or predict method.
     data : pd.DataFrame
-        Data to be clustered.
-
-    Returns:
-    --------
-    float
-        Average silhouette score across multiple subsamples.
-    """
-    sample_sizes = define_sample_sizes(len(data))
-    return compute_silhouette_scores(clusterer, data, sample_sizes)
-
-
-def calculate_silhouette(clf, data: pd.DataFrame, available_features: List[str], random_seed: int) -> float:
-    """
-    Calculates the silhouette score for a given clustering model using subsampling.
-
-    Parameters:
-    -----------
-    clf : object
-        Clustering model that implements fit_predict or predict method.
-    data : pd.DataFrame
-        Data to be clustered.
-    available_features : List[str]
-        List of feature names to use for clustering.
-    random_seed : int
+        Data to be clustered or classified for outliers.
+    random_seed : int, optional
         Seed for random number generation.
 
     Returns:
@@ -127,4 +106,4 @@ def calculate_silhouette(clf, data: pd.DataFrame, available_features: List[str],
         Average silhouette score across multiple subsamples.
     """
     sample_sizes = define_sample_sizes(len(data))
-    return compute_silhouette_scores(clf, data, sample_sizes, available_features, random_seed)
+    return compute_silhouette_scores(clusterer, data, sample_sizes, random_seed)
