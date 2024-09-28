@@ -152,23 +152,29 @@ def create_cumulative_chart(population: pd.DataFrame, sample: pd.DataFrame, valu
         logger.info(f"Збережено загальний кумулятивний графік: {output_path}")
 
 
-def create_umap_projection(population: pd.DataFrame, label_column: str, cluster_column: str, features: List[str], output_path: str):
+def create_umap_projection(population: pd.DataFrame, label_column: str, features: List[str], output_path: str, cluster_column: Optional[str] = None):
     population = population.copy()
 
-    # Проверка на наличие столбцов label_column и cluster_column
-    if label_column not in population.columns or cluster_column not in population.columns:
-        raise ValueError(
-            f"Columns '{label_column}' or '{cluster_column}' not found in the DataFrame")
+    # Проверка на наличие столбца label_column
+    if label_column not in population.columns:
+        raise ValueError(f"Column '{label_column}' not found in the DataFrame")
 
-    # Убедимся, что колонка cluster не попала в features
-    if cluster_column in features:
-        raise ValueError(
-            f"Column '{cluster_column}' should not be in the features list")
+    # Флаг наличия колонки кластера
+    has_cluster_column = cluster_column and cluster_column in population.columns
 
-    print(f"Label column: {label_column}, Cluster column: {cluster_column}")
+    if has_cluster_column:
+        # Убедимся, что колонка cluster не попала в features
+        if cluster_column in features:
+            raise ValueError(
+                f"Column '{cluster_column}' should not be in the features list")
+        # Удаляем строки с пропущенными значениями в метках и кластерах
+        population = population.dropna(subset=[label_column, cluster_column])
+    else:
+        # Удаляем строки с пропущенными значениями только в метках
+        population = population.dropna(subset=[label_column])
 
-    # Удаляем строки с пропущенными значениями в метках и кластерах
-    population = population.dropna(subset=[label_column, cluster_column])
+    print(
+        f"Label column: {label_column}, Cluster column: {cluster_column if has_cluster_column else 'None'}")
 
     available_features = get_available_features(population, features)
     print(f"Available features: {available_features}")
@@ -185,15 +191,14 @@ def create_umap_projection(population: pd.DataFrame, label_column: str, cluster_
     embedding = reducer.fit_transform(feature_data)
     print(f"UMAP embedding shape: {embedding.shape}")
 
-    # Извлекаем значения меток (label) и кластеров (cluster)
+    # Извлекаем значения меток (label)
     labels = population[label_column].values
-    clusters = population[cluster_column].values
 
-    print(f"Labels shape: {labels.shape}, Clusters shape: {clusters.shape}")
+    print(f"Labels shape: {labels.shape}")
 
-    # Создаем маски для label = 1 (черные точки) и label = 0 (кластерная раскраска)
+    # Создаем маски для label = 1 (черные точки) и label = 0 (обычные точки)
     mask_anomalies = labels == 1  # label = 1 (черные точки)
-    mask_clusters = labels == 0   # label = 0 (по кластерам)
+    mask_clusters = labels == 0   # label = 0 (обычные точки)
 
     print(
         f"Mask anomalies shape: {mask_anomalies.shape}, Mask clusters shape: {mask_clusters.shape}")
@@ -202,15 +207,22 @@ def create_umap_projection(population: pd.DataFrame, label_column: str, cluster_
 
     plt.figure(figsize=(10, 8))
 
-    # Сначала рисуем точки с label = 0 (обычные точки) с раскраской по кластерам
-    if mask_clusters.sum() > 0:
+    # Если кластеры указаны и они есть в DataFrame, рисуем их
+    if has_cluster_column and mask_clusters.sum() > 0:
+        clusters = population[cluster_column].values
         print(f"Plotting clusters: {embedding[mask_clusters, 0].shape}")
         scatter = plt.scatter(
             embedding[mask_clusters, 0], embedding[mask_clusters, 1],
             c=clusters[mask_clusters], cmap='viridis', s=10, alpha=0.7, label='Clustered (label=0)')
-
         # Добавляем цветовую легенду для кластеров
         plt.colorbar(scatter, label=cluster_column)
+    else:
+        print(
+            f"Plotting without clusters: {embedding[mask_clusters, 0].shape}")
+        plt.scatter(
+            embedding[mask_clusters, 0], embedding[mask_clusters, 1],
+            facecolor='blue', label='Clustered (label=0)',
+            s=10, alpha=0.7)
 
     # Затем рисуем точки с label = 1 (аномалии) поверх остальных
     if mask_anomalies.sum() > 0:
@@ -221,8 +233,12 @@ def create_umap_projection(population: pd.DataFrame, label_column: str, cluster_
             s=100, linewidth=1.5, alpha=1.0)
 
     # Оформление графика
-    plt.title(
-        f'UMAP Projection (colored by {cluster_column}, anomalies in black)')
+    if has_cluster_column:
+        plt.title(
+            f'UMAP Projection (colored by {cluster_column}, anomalies in black)')
+    else:
+        plt.title(f'UMAP Projection (anomalies in black)')
+
     plt.xlabel('UMAP 1')
     plt.ylabel('UMAP 2')
 

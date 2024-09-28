@@ -463,7 +463,7 @@ class SamplingApp:
                     population_with_results, population_for_chart, sample, method_description, best_study = kmeans_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 8:
-                    population_with_results, population_for_chart, sample, method_description, best_study = autoencoder_sampling(
+                    population_with_results, population_for_chart, sample, method_description = autoencoder_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 9:
                     population_with_results, population_for_chart, sample, method_description, best_study = hdbscan_sampling(
@@ -524,16 +524,16 @@ class SamplingApp:
                     cumulative_chart_path
                 )
 
-            if choice in (5, 6, 7, 9):
+            if choice in (5, 6, 7, 8, 9):
                 umap_projection_path = f"{file_name}_{sample_type}_umap_projection.png"
                 create_umap_projection(
                     population_for_chart,
                     'is_sample',
-                    'cluster',
                     features,
-                    umap_projection_path
+                    umap_projection_path,
+                    'cluster'
                 )
-            if choice in (7, 8, 9):
+            if choice in (7, 9):
                 optuna_results_path = f"{file_name}_{sample_type}"
                 visualize_optuna_results(best_study, optuna_results_path)
 

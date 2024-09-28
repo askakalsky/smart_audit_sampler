@@ -1,287 +1,156 @@
-from tqdm import tqdm
-import joblib
-import optuna.visualization as vis
-from optuna.pruners import MedianPruner
 import torch
-import torch.optim as optim
-import torch.nn as nn
+from torch import nn
 import numpy as np
 import pandas as pd
-import logging
-from torch.cuda.amp import autocast, GradScaler
 from torch.utils.data import DataLoader, TensorDataset
-import optuna
-import copy  # Добавлено для копирования лучшей модели
-from typing import Optional, Tuple, List, Dict
-from sklearn.model_selection import KFold
+import logging
 
+# Configure logging
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-class Autoencoder(nn.Module):
-    def __init__(self, input_dim: int, hidden_dim: int):
-        super(Autoencoder, self).__init__()
+class FlexibleAutoencoder(nn.Module):
+    def __init__(self, input_dim, hidden_dim=64, bottleneck_dim=3):
+        """
+        Flexible autoencoder architecture with an additional hidden layer.
+
+        Args:
+            input_dim (int): Number of input features.
+            hidden_dim (int, optional): Size of the hidden layer. Default is 64.
+            bottleneck_dim (int, optional): Size of the bottleneck layer. Default is 3.
+        """
+        super(FlexibleAutoencoder, self).__init__()
+
+        # Encoder: compress input to hidden layer, then to bottleneck
         self.encoder = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.ReLU()
-        )
-        self.decoder = nn.Sequential(
-            nn.Linear(hidden_dim // 2, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, input_dim),
+            nn.Linear(input_dim, hidden_dim),  # Compress input to hidden size
+            nn.LeakyReLU(negative_slope=0.2),  # Activation
+            nn.Linear(hidden_dim, bottleneck_dim),  # Compress to bottleneck
+            nn.LeakyReLU(negative_slope=0.2)   # Activation
         )
 
+        # Decoder: reconstruct from bottleneck to hidden, then back to input size
+        self.decoder = nn.Sequential(
+            # Expand from bottleneck to hidden size
+            nn.Linear(bottleneck_dim, hidden_dim),
+            nn.LeakyReLU(negative_slope=0.2),  # Activation
+            nn.Linear(hidden_dim, input_dim),   # Expand back to input size
+            # Output activation to keep the range [0, 1] if necessary
+            nn.Sigmoid()
+        )
+
+        # Xavier initialization
+        self.apply(self._init_weights)
+
+    def _init_weights(self, m):
+        if isinstance(m, nn.Linear):
+            nn.init.xavier_uniform_(m.weight)
+            if m.bias is not None:
+                nn.init.zeros_(m.bias)
+
     def forward(self, x):
+        # Forward pass: encode and then decode
         encoded = self.encoder(x)
         decoded = self.decoder(encoded)
         return decoded
 
 
-def create_dataloader(data, batch_size, shuffle=True):
-    return DataLoader(TensorDataset(torch.from_numpy(data.values).float()),
-                      batch_size=batch_size, shuffle=shuffle, num_workers=0, pin_memory=True)
+def autoencoder_sampling(data: pd.DataFrame, data_preprocessed: pd.DataFrame, sample_size: int,
+                         features: list, random_seed: int):
+    """
+    Function to perform anomaly detection using flexible autoencoder sampling (Realization #2).
 
+    Args:
+        data (pd.DataFrame): Original dataset.
+        data_preprocessed (pd.DataFrame): Preprocessed dataset (used for training).
+        sample_size (int): Number of samples to return in the final selection.
+        features (list): List of feature names (numerical and categorical).
+        random_seed (int): Random seed for reproducibility.
 
-def create_and_train_model(trial, X_train, X_val, device, max_epochs=50):
-    input_dim = X_train.shape[1]
-    input_size = X_train.shape[0]
+    Returns:
+        population_with_results (pd.DataFrame): Original data with additional fields "is_sample" and "anomaly_score".
+        population_for_chart (pd.DataFrame): Preprocessed data with additional fields "is_sample" and "anomaly_score".
+        sample (pd.DataFrame): Sampled data with "is_sample" == 1, size equals to sample_size.
+        method_description (str): Description of the autoencoder architecture and details.
+    """
+    # Set random seed for reproducibility
+    torch.manual_seed(random_seed)
+    np.random.seed(random_seed)
 
-    min_batch_size = determine_batch_size(input_size)
-    max_batch_size = min_batch_size * 2
+    # Convert preprocessed data to PyTorch tensor
+    data_tensor = torch.tensor(data_preprocessed.values, dtype=torch.float32)
 
-    hidden_dim = trial.suggest_int(
-        'hidden_dim', int(input_dim * 0.5), int(input_dim * 1.25))
-    learning_rate = trial.suggest_float('learning_rate', 1e-5, 1e-1, log=True)
-    batch_size = trial.suggest_int(
-        'batch_size', min_batch_size, max_batch_size)
+    # Create DataLoader for batch processing
+    dataset = TensorDataset(data_tensor)
+    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-    logger.info(f"Creating and training model with hidden_dim={hidden_dim}, "
-                f"learning_rate={learning_rate}, batch_size={batch_size}")
+    # Initialize autoencoder model
+    # Number of features after preprocessing
+    input_dim = data_preprocessed.shape[1]
+    autoencoder = FlexibleAutoencoder(input_dim=input_dim)
 
-    model = Autoencoder(input_dim=input_dim, hidden_dim=hidden_dim).to(device)
+    # Define optimizer and loss function
+    optimizer = torch.optim.Adam(autoencoder.parameters(), lr=1e-3)
+    # Can replace with nn.BCEWithLogitsLoss() if working with binary data
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    scaler = GradScaler()
-    use_amp = torch.cuda.is_available()
 
-    train_loader = create_dataloader(X_train, batch_size)
-    val_loader = create_dataloader(X_val, batch_size)
+    # Training the autoencoder
+    num_epochs = 10  # More epochs for deeper model
+    logger.info(f"Training started with {num_epochs} epochs.")
 
-    best_val_loss = float('inf')
-    best_model = None  # Для сохранения наилучшей модели
-    patience = 10
-    for epoch in range(max_epochs):
-        model.train()
-        for batch in train_loader:
-            inputs = batch[0].to(device)
+    for epoch in range(num_epochs):
+        total_loss = 0
+        for batch in dataloader:
+            batch_data = batch[0]  # Get batch data
+
+            # Forward pass
+            reconstructed = autoencoder(batch_data)
+            loss = criterion(reconstructed, batch_data)
+
+            # Backward pass and optimization
             optimizer.zero_grad()
-            with autocast(enabled=use_amp):
-                outputs = model(inputs)
-                loss = criterion(outputs, inputs)
-            if use_amp:
-                scaler.scale(loss).backward()
-                scaler.step(optimizer)
-                scaler.update()
-            else:
-                loss.backward()
-                optimizer.step()
+            loss.backward()
+            optimizer.step()
 
-        val_loss = evaluate_model(model, val_loader, criterion, device)
-
-        trial.report(val_loss, epoch)
-        if trial.should_prune():
-            raise optuna.TrialPruned()
-
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
-            best_model = copy.deepcopy(model)
-            patience = 10
-        else:
-            patience -= 1
-            if patience == 0:
-                break
-
-    return best_model, best_val_loss
-
-
-def evaluate_model(model, dataloader, criterion, device):
-    model.eval()
-    total_loss = 0
-    use_amp = torch.cuda.is_available()
-
-    with torch.no_grad():
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            with autocast(enabled=use_amp):
-                outputs = model(inputs)
-                loss = criterion(outputs, inputs)
-            total_loss += loss.item() * inputs.size(0)
-    mean_loss = total_loss / len(dataloader.dataset)
-    return mean_loss
-
-
-def objective_with_cv(trial, X, n_splits=3, device='cuda', random_seed=None):
-    logger.debug(f"Starting cross-validation with {n_splits} splits.")
-    kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_seed)
-    cv_scores = []
-
-    for fold, (train_index, val_index) in enumerate(kf.split(X)):
-        X_train, X_val = X.iloc[train_index], X.iloc[val_index]
-        model, val_score = create_and_train_model(
-            trial, X_train, X_val, device)
-        cv_scores.append(val_score)
-
-    mean_score = np.mean(cv_scores)
-    logger.info(f"Cross-validation mean score: {mean_score:.16f}")
-    return mean_score
-
-
-def optimize_autoencoder(X: np.ndarray, n_trials: int = 30, n_restarts: int = 3, random_seed: int = None) -> Tuple[dict, float, optuna.Study]:
-    logger.info(
-        f"Starting optimization with {n_trials} trials and {n_restarts} restarts.")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    best_study = None
-    best_value = float('inf')
-
-    for restart in tqdm(range(n_restarts), desc="Optimization restarts"):
-        logger.info(f"Optimization restart {restart+1}/{n_restarts}")
-        pruner = MedianPruner(n_startup_trials=5,
-                              n_warmup_steps=10, interval_steps=1)
-        study = optuna.create_study(direction='minimize', pruner=pruner)
-        study.optimize(lambda trial: objective_with_cv(trial, X, device=device, random_seed=random_seed),
-                       n_trials=n_trials // n_restarts, n_jobs=-1, show_progress_bar=True)
-
-        if study.best_value < best_value:
-            best_value = study.best_value
-            best_study = study
-            logger.info(f"New best value found: {best_value:.4f}")
-
-    return best_study.best_params, best_value, best_study
-
-
-def compute_reconstruction_errors(model, data, device, batch_size=1024):
-    logger.debug(
-        f"Computing reconstruction errors with batch_size={batch_size}")
-    model.eval()
-    dataloader = create_dataloader(data, batch_size, shuffle=False)
-    reconstruction_errors = []
-    use_amp = torch.cuda.is_available()
-
-    with torch.no_grad():
-        for batch in dataloader:
-            inputs = batch[0].to(device)
-            with autocast(enabled=use_amp):
-                outputs = model(inputs)
-                errors = torch.mean((outputs - inputs) ** 2, dim=1)
-            reconstruction_errors.extend(errors.cpu().numpy())
-    return np.array(reconstruction_errors)
-
-
-def autoencoder_sampling(population_original: pd.DataFrame,
-                         population: pd.DataFrame,
-                         sample_size: int,
-                         features: List[str],
-                         random_seed: int) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
-    try:
+            total_loss += loss.item()
         logger.info(
-            f"Starting autoencoder sampling with sample_size={sample_size}, random_seed={random_seed}")
-        torch.manual_seed(random_seed)
-        np.random.seed(random_seed)
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            f"Epoch [{epoch + 1}/{num_epochs}], Loss: {total_loss / len(dataloader):.6f}")
 
-        scaled_data = population
+    # Detecting anomalies (Reconstruction error as anomaly score)
+    autoencoder.eval()  # Set model to evaluation mode
+    with torch.no_grad():
+        reconstructed_data = autoencoder(data_tensor)
+        reconstruction_errors = torch.mean(
+            (reconstructed_data - data_tensor) ** 2, dim=1)
+        anomaly_scores = reconstruction_errors.numpy()
 
-        subsample_size = min(100000, len(scaled_data))
-        subsample_indices = np.random.choice(
-            len(scaled_data), subsample_size, replace=False)
-        subsample_data = scaled_data.iloc[subsample_indices]
+    # Add anomaly scores to the original dataset
+    population_with_results = data.copy()
+    population_with_results['anomaly_score'] = anomaly_scores
 
-        best_params, best_value, best_study = optimize_autoencoder(
-            subsample_data, random_seed=random_seed)
-        logger.info(
-            f"Best parameters: {best_params}, Best value: {best_value:.16f}")
+    # Add anomaly scores to the preprocessed dataset (for charting)
+    population_for_chart = data_preprocessed.copy()
+    population_for_chart['anomaly_score'] = anomaly_scores
 
-        final_model = Autoencoder(
-            len(scaled_data.columns), best_params['hidden_dim']).to(device)
-        optimizer = optim.Adam(final_model.parameters(),
-                               lr=best_params['learning_rate'])
-        criterion = nn.MSELoss()
-        scaler = GradScaler()
-        use_amp = torch.cuda.is_available()
+    # Sort data by anomaly score and select top "sample_size" records as the sample
+    sample_indices = np.argsort(anomaly_scores)[-sample_size:]
+    population_with_results['is_sample'] = 0
+    population_with_results.loc[sample_indices, 'is_sample'] = 1
 
-        full_train_loader = create_dataloader(
-            scaled_data, batch_size=best_params['batch_size'])
+    population_for_chart['is_sample'] = 0
+    population_for_chart.loc[sample_indices, 'is_sample'] = 1
 
-        for epoch in range(100):
-            final_model.train()
-            for batch in full_train_loader:
-                inputs = batch[0].to(device)
-                optimizer.zero_grad()
-                with autocast(enabled=use_amp):
-                    outputs = final_model(inputs)
-                    loss = criterion(outputs, inputs)
-                if use_amp:
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-                else:
-                    loss.backward()
-                    optimizer.step()
+    sample = population_for_chart[population_for_chart['is_sample'] == 1]
 
-        reconstruction_errors = compute_reconstruction_errors(
-            final_model, scaled_data, device)
+    # Method description for logging
+    method_description = (
+        f"Autoencoder architecture: Flexible with 2 hidden layers (LeakyReLU activation), "
+        f"input_dim = {input_dim}, hidden_dim = 64, bottleneck_dim = 3.\n"
+        f"Trained on {len(data_preprocessed)} records with {len(features)} features.\n"
+        f"Sample size = {sample_size}, random_seed = {random_seed}.\n"
+        f"Detected {sample_size} most anomalous records."
+    )
 
-        population_original['reconstruction_error'] = reconstruction_errors
-        population['reconstruction_error'] = reconstruction_errors
-
-        population_original = population_original.sort_values(
-            by='reconstruction_error', ascending=False)
-        population = population.sort_values(
-            by='reconstruction_error', ascending=False)
-        sample_processed = population_original.head(sample_size)
-
-        population_original['is_sample'] = population['is_sample'] = False
-        population_original.loc[sample_processed.index, 'is_sample'] = True
-        population.loc[sample_processed.index, 'is_sample'] = True
-
-        torch.save(final_model.state_dict(), 'autoencoder_model.pth')
-        joblib.dump(scaler, 'scaler.joblib')
-        logger.info(f"Model and scaler saved successfully.")
-
-        method_description = (
-            f"Вибірка на основі Autoencoder з автоматичним підбором гіперпараметрів (Optuna).\n"
-            f"Розмір вибірки: {sample_size}.\n"
-            f"Найкраще значення цільової функції: {best_value}.\n"
-            f"Requested features: {features}.\n"
-            f"Кількість аномалій: {len(sample_processed)}.\n"
-            f"Дата та час створення вибірки: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S')}.\n"
-            f"Випадкове зерно: {random_seed}.\n"
-        )
-
-        return population_original, population, sample_processed, method_description, best_study
-
-    except ValueError as e:
-        logger.error(f"ValueError: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"ValueError: {e}", None
-    except Exception as e:
-        logger.error(f"Unexpected error: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Unexpected error: {e}", None
-
-
-def determine_batch_size(input_size):
-    if input_size < 1000:
-        return 16
-    elif 1000 <= input_size < 5000:
-        return 32
-    elif 5000 <= input_size < 10000:
-        return 48
-    elif 10000 <= input_size < 30000:
-        return 64
-    elif 30000 <= input_size < 100000:
-        return 128
-    else:
-        return 256
+    return population_with_results, population_for_chart, sample, method_description
