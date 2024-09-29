@@ -1,39 +1,10 @@
-# Standard libraries
 import os
 import random
 import logging
 import datetime
-import uuid
-
-
-# Data manipulation and analysis
-import numpy as np
 import pandas as pd
-
-# Machine learning
-from sklearn.exceptions import NotFittedError
-
-# Visualization
-import matplotlib.pyplot as plt
-
-# GUI
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
-
-# Optimization
-import optuna
-
-# Parallel processing
-from joblib import Parallel, delayed
-import joblib
-
-# Type hinting
-from typing import Optional, Tuple, List, Dict
-
-# Process control
-from tqdm import tqdm
-
-# Imports for ML and statistical methods
 from ml_sampling.isolation_forest import isolation_forest_sampling
 from ml_sampling.lof import lof_sampling
 from ml_sampling.kmeans import kmeans_sampling
@@ -43,8 +14,6 @@ from statistical_sampling.random import random_sampling
 from statistical_sampling.systematic import systematic_sampling
 from statistical_sampling.stratified import stratified_sampling
 from statistical_sampling.monetary_unit import monetary_unit_sampling
-
-# Imports for visualization and preprocessing
 from utils.visualization import create_strata_chart, create_cumulative_chart, create_umap_projection, visualize_optuna_results
 from utils.preprocessing import preprocess_data
 
@@ -65,6 +34,19 @@ class SamplingApp:
         self.choice_var = tk.IntVar(value=1)
         self.use_threshold_var = tk.IntVar(value=0)
         self.use_stratify_var = tk.IntVar(value=0)
+
+        self.sampling_methods = {
+            1: {"name": "Випадкова вибірка", "description": "кожен елемент генеральної сукупності має рівну ймовірність потрапити у вибірку."},
+            2: {"name": "Систематична вибірка", "description": "елементи вибираються з генеральної сукупності через рівні інтервали."},
+            3: {"name": "Стратифікована вибірка", "description": "генеральна сукупність ділиться на страти (групи), і з кожної страти формується випадкова вибірка."},
+            4: {"name": "Метод грошової одиниці", "description": "ймовірність вибору елемента пропорційна його грошовій величині. Використовується для оцінки сумарної величини помилок."},
+            5: {"name": "Isolation Forest", "description": "алгоритм для виявлення аномалій на основі випадкових лісів."},
+            6: {"name": "Local Outlier Factor (LOF)", "description": "метод для виявлення локальних аномалій у даних."},
+            7: {"name": "Кластеризація K-Means", "description": "групування даних за схожістю для виявлення незвичайних точок."},
+            8: {"name": "Автоенкодер", "description": "зменшення розмірності даних для виявлення відхилень через аналіз помилки відновлення."},
+            9: {"name": "HDBSCAN", "description": "знаходження аномалій, класифікуючи точки як шум, спираючись на їхню щільність і відстань до інших точок, що дозволяє виокремлювати викиди в даних."}
+        }
+
         self.create_widgets()
 
     def create_widgets(self):
@@ -90,17 +72,10 @@ class SamplingApp:
         choice_label.grid(row=0, column=0, columnspan=2,
                           sticky="w", pady=(0, 5))
 
-        self.descriptions = {
-            1: "Випадкова вибірка: кожен елемент генеральної сукупності має рівну ймовірність потрапити у вибірку.",
-            2: "Систематична вибірка: елементи вибираються з генеральної сукупності через рівні інтервали.",
-            3: "Стратифікована вибірка: генеральна сукупність ділиться на страти (групи), і з кожної страти формується випадкова вибірка.",
-            4: "Метод грошової одиниці: ймовірність вибору елемента пропорційна його грошовій величині. Використовується для оцінки сумарної величини помилок."
-        }
-
-        for i, (value, description) in enumerate(self.descriptions.items()):
+        for value, method_info in self.sampling_methods.items():
             rb = tk.Radiobutton(
                 self.choice_frame,
-                text=description,
+                text=f"{method_info['name']}: {method_info['description']}",
                 variable=self.choice_var,
                 value=value,
                 command=self.on_choice_change,
@@ -109,38 +84,7 @@ class SamplingApp:
                 wraplength=600,
                 justify="left"
             )
-            rb.grid(row=i + 1, column=0, columnspan=2, sticky="w")
-
-        self.ai_methods = {
-            5: "Isolation Forest",
-            6: "Local Outlier Factor (LOF)",
-            7: "Кластеризація K-Means",
-            8: "Автоенкодер",
-            9: "HDBSCAN"
-        }
-
-        self.descriptions.update({
-            5: "алгоритм для виявлення аномалій на основі випадкових лісів.",
-            6: "метод для виявлення локальних аномалій у даних.",
-            7: "групування даних за схожістю для виявлення незвичайних точок.",
-            8: "зменшення розмірності даних для виявлення відхилень через аналіз помилки відновлення.",
-            9: "знаходження аномалій, класифікуючи точки як шум, спираючись на їхню щільність і відстань до інших точок, що дозволяє виокремлювати викиди в даних."
-        })
-
-        start_row = len(self.descriptions) - len(self.ai_methods)
-        for i, (value, description) in enumerate(self.ai_methods.items(), start=start_row):
-            rb = tk.Radiobutton(
-                self.choice_frame,
-                text=f"{description}: {self.descriptions[value]}",
-                variable=self.choice_var,
-                value=value,
-                command=self.on_choice_change,
-                bg="#f0f0f0",
-                font=("Arial", 8),
-                wraplength=600,
-                justify="left"
-            )
-            rb.grid(row=i + 1, column=0, columnspan=2, sticky="w")
+            rb.grid(row=value, column=0, columnspan=2, sticky="w")
 
         self.options_frame = ttk.Frame(self.root, padding=(10, 10))
         self.options_frame.grid(row=1, column=0, sticky="w")
@@ -324,7 +268,7 @@ class SamplingApp:
         ]:
             widget.grid_remove()
 
-        if choice in (1, 2, 3, 4, 5, 6, 7, 8, 9):
+        if choice in self.sampling_methods:
             self.sample_size_label.grid(row=2, column=0, sticky="w")
             self.sample_size_entry.grid(row=3, column=0, sticky="w")
 
@@ -348,50 +292,13 @@ class SamplingApp:
 
         self.toggle_options(choice)
 
-        if choice in self.ai_methods:
+        if choice in (5, 6, 7, 8, 9):
             self.column_types_button.grid(row=10, column=0, sticky="w")
             self.ai_parameters_frame.grid(row=11, column=0, sticky="w")
         else:
             self.column_types_button.grid_remove()
             self.ai_parameters_frame.grid_remove()
             self.preprocess_label.grid_remove()
-
-        for widget in [
-            self.sample_size_label,
-            self.sample_size_entry,
-            self.strata_column_label,
-            self.strata_column_combobox,
-            self.value_column_label,
-            self.value_column_combobox,
-            self.use_threshold_label,
-            self.use_threshold_checkbutton,
-            self.threshold_label,
-            self.threshold_entry,
-            self.use_stratify_label,
-            self.use_stratify_checkbutton,
-            self.mus_strata_column_label,
-            self.mus_strata_column_combobox,
-        ]:
-            widget.grid_remove()
-
-        if choice in (1, 2, 3, 4, 5, 6, 7, 8, 9):
-            self.sample_size_label.grid(row=2, column=0, sticky="w")
-            self.sample_size_entry.grid(row=3, column=0, sticky="w")
-
-            if choice == 3:
-                self.strata_column_label.grid(row=4, column=0, sticky="w")
-                self.strata_column_combobox.grid(row=5, column=0, sticky="w")
-
-            if choice == 4:
-                self.value_column_label.grid(row=4, column=0, sticky="w")
-                self.value_column_combobox.grid(row=5, column=0, sticky="w")
-                self.use_threshold_label.grid(row=6, column=0, sticky="w")
-                self.use_threshold_checkbutton.grid(
-                    row=6, column=1, sticky="w")
-                self.toggle_threshold_input()
-                self.use_stratify_label.grid(row=8, column=0, sticky="w")
-                self.use_stratify_checkbutton.grid(row=8, column=1, sticky="w")
-                self.toggle_stratify_input()
 
     def create_sample(self):
         sample = None
@@ -410,6 +317,10 @@ class SamplingApp:
 
             random_seed = random.randint(1, 10000)
             logger.debug(f"Використовується випадкове зерно: {random_seed}")
+
+            method_info = self.sampling_methods.get(choice)
+            if not method_info:
+                raise ValueError("Невідомий тип вибірки.")
 
             if choice == 1:
                 population_with_results, sample, method_description = random_sampling(
@@ -445,7 +356,7 @@ class SamplingApp:
                     f"Параметри методу грошової одиниці: value_column={value_column}, threshold={threshold}, strata_column={strata_column}")
                 population_with_results, sample, method_description = monetary_unit_sampling(
                     population, sample_size, value_column, threshold, strata_column, random_seed)
-            elif choice in self.ai_methods:
+            elif choice in (5, 6, 7, 8, 9):
                 if not self.numerical_columns and not self.categorical_columns:
                     raise ValueError(
                         "Вкажіть типи колонок для передобробки даних.")
@@ -468,36 +379,15 @@ class SamplingApp:
                 elif choice == 9:
                     population_with_results, population_for_chart, sample, method_description, best_study = hdbscan_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
-                else:
-                    raise ValueError("Невідомий метод вибірки.")
             else:
-                raise ValueError("Невідомий тип вибірки.")
+                raise ValueError("Невідомий метод вибірки.")
 
             if sample is None or sample.empty:
                 raise ValueError(
                     f"Не вдалося сформувати вибірку або вибірка порожня. {method_description}")
 
             file_name, file_ext = os.path.splitext(file_path)
-            if choice == 1:
-                sample_type = "random"
-            elif choice == 2:
-                sample_type = "systematic"
-            elif choice == 3:
-                sample_type = "stratified"
-            elif choice == 4:
-                sample_type = "mus"
-            elif choice == 5:
-                sample_type = "isolation_forest"
-            elif choice == 6:
-                sample_type = "lof"
-            elif choice == 7:
-                sample_type = "k-means"
-            elif choice == 8:
-                sample_type = "autoencoder"
-            elif choice == 9:
-                sample_type = 'hdbscan'
-            else:
-                sample_type = "unknown"
+            sample_type = method_info['name'].lower().replace(' ', '_')
             output_path = f"{file_name}_{sample_type}"
             sample_output_path = f"{output_path}_sample.csv"
             population_output_path = f"{output_path}_population.csv"
