@@ -20,24 +20,37 @@ def preprocess_data(df: pd.DataFrame,
                     random_seed: Optional[int] = None
                     ) -> Tuple[Optional[pd.DataFrame], str]:
     """
-    Preprocesses a given DataFrame by applying one-hot encoding to categorical columns 
+    Preprocess a given DataFrame by applying one-hot encoding to categorical columns 
     and scaling numerical columns. Log transformation is applied to numerical columns 
     with a skewness higher than the skew_threshold. Other numerical columns are standardized.
 
-    Args:
-        df (pd.DataFrame): Input DataFrame containing raw data.
-        numerical_columns (List[str]): List of column names that contain numerical data to be scaled.
-        categorical_columns (List[str]): List of column names that contain categorical data for one-hot encoding.
-        sample_fraction (float, optional): Fraction of the dataset to use (default is 1.0, meaning no subsampling).
-        skew_threshold (float, optional): Threshold for skewness to apply log transformation (default is 0.75).
-        random_seed (Optional[int], optional): Random seed for reproducibility in sampling (default is None).
+    Parameters:
+    -----------
+    df : pd.DataFrame
+        Input DataFrame containing raw data to be preprocessed.
+    numerical_columns : List[str]
+        List of column names that contain numerical data to be scaled.
+    categorical_columns : List[str]
+        List of column names that contain categorical data for one-hot encoding.
+    sample_fraction : float, optional
+        Fraction of the dataset to use (default is 1.0, meaning no subsampling).
+    skew_threshold : float, optional
+        Threshold for skewness to apply log transformation (default is 0.75).
+    random_seed : Optional[int], optional
+        Random seed for reproducibility in sampling (default is None).
 
     Returns:
-        pd.DataFrame: Processed DataFrame with scaled numerical columns and one-hot encoded categorical columns.
-        str: Method description detailing each preprocessing step.
+    --------
+    Tuple containing:
+        - processed_df : pd.DataFrame
+          Processed DataFrame with scaled numerical columns and one-hot encoded categorical columns.
+        - method_description : str
+          Description detailing each preprocessing step.
 
     Raises:
-        ValueError: If the input DataFrame or column lists are invalid.
+    -------
+    ValueError:
+        If the input DataFrame or column lists are invalid.
     """
     try:
         # Make a copy of the DataFrame to avoid modifying the original

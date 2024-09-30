@@ -21,24 +21,34 @@ def hdbscan_sampling(
     random_seed: int
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
     """
-    Performs anomaly sampling using the HDBSCAN clustering algorithm with hyperparameter tuning via Optuna.
-    The function clusters the data, marks anomalies, and returns a sample of anomalies. 
-    It also optimizes the clustering parameters to maximize the silhouette score.
+    Anomaly sampling using the HDBSCAN clustering algorithm with hyperparameter tuning via Optuna.
 
-    Args:
-        population_original (pd.DataFrame): Original DataFrame to be processed and annotated with cluster information.
-        population (pd.DataFrame): A copy of the original DataFrame used for clustering and anomaly detection.
-        sample_size (int): The desired number of anomalies to sample.
-        features (List[str]): The list of feature columns used for clustering (only for documentation).
-        random_seed (int): Seed for random number generation to ensure reproducibility.
+    Parameters:
+    -----------
+    population_original : pd.DataFrame
+        The original dataset to be processed and annotated with cluster information.
+    population : pd.DataFrame
+        A copy of the original dataset used for clustering and anomaly detection.
+    sample_size : int
+        The desired number of anomalies to be sampled.
+    features : List[str]
+        List of features used for clustering (used for documentation purposes only).
+    random_seed : int
+        Seed for random number generation to ensure reproducibility.
 
     Returns:
-        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
-            - Updated original population DataFrame with cluster and sample annotations.
-            - Processed population DataFrame with cluster and anomaly information.
-            - DataFrame containing the sampled anomalies.
-            - A description of the method used for sampling.
-            - The Optuna study object that contains the results of hyperparameter optimization.
+    --------
+    Tuple containing:
+        - population_original : pd.DataFrame
+          The original dataset updated with cluster and sample annotations.
+        - population : pd.DataFrame
+          The processed dataset containing cluster and anomaly information.
+        - sample_processed : pd.DataFrame
+          Subset of the dataset containing the sampled anomalies.
+        - method_description : str
+          Description of the method used for sampling.
+        - study : optuna.Study
+          The Optuna study object with results of hyperparameter optimization.
     """
     try:
         # Make copies to avoid modifying the original DataFrames
@@ -102,6 +112,10 @@ def hdbscan_sampling(
         # Identify anomalies
         anomalies = population_original[population_original['is_anomaly'] == 1]
 
+        # Check if there are any anomalies, if not raise an error or warning
+        if anomalies.empty:
+            raise ValueError("У наборі даних не було виявлено аномалій.")
+
         # Sample anomalies based on the requested sample size
         if len(anomalies) > sample_size:
             sample_indices = rng.choice(
@@ -146,5 +160,5 @@ def hdbscan_sampling(
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"KeyError: {ke}", None
 
     except Exception as e:
-        logger.exception(f"Unexpected error in kmeans_sampling: {e}")
+        logger.exception(f"Unexpected error in hdbscan_sampling: {e}")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Unexpected error: {e}", None

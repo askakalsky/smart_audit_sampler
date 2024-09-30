@@ -161,6 +161,11 @@ class SamplingApp:
             self.root, text="Створити вибірку", command=self.create_sample)
         self.create_button.grid(row=3, column=1, sticky="se", padx=10, pady=10)
 
+        # Добавляем метку состояния
+        self.status_label = ttk.Label(
+            self.root, text="", foreground='blue')
+        self.status_label.grid(row=3, column=0, sticky="w", padx=10)
+
         self.on_choice_change()
 
     def toggle_threshold_input(self):
@@ -261,21 +266,28 @@ class SamplingApp:
             filetypes=(("CSV files", "*.csv"), ("All files", "*.*"))
         )
         if file_path:
+            self.status_label.config(text="Завантаження файлу...")
             self.file_path_entry.delete(0, tk.END)
             self.file_path_entry.insert(0, file_path)
-            self.populate_column_dropdowns(file_path)
-            self.data = pd.read_csv(file_path)
+            try:
+                self.data = pd.read_csv(file_path)
+                self.populate_column_dropdowns(self.data)
+            except Exception as e:
+                self.result_label.config(
+                    text=f"Помилка при читанні файлу: {e}")
+            finally:
+                self.status_label.config(text="")
 
-    def populate_column_dropdowns(self, file_path):
+    def populate_column_dropdowns(self, df):
         try:
-            df = pd.read_csv(file_path)
             numerical_columns = [
                 col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
             self.value_column_combobox['values'] = numerical_columns
             self.strata_column_combobox['values'] = list(df.columns)
             self.mus_strata_column_combobox['values'] = list(df.columns)
         except Exception as e:
-            self.result_label.config(text=f"Помилка при читанні файлу: {e}")
+            self.result_label.config(
+                text=f"Помилка при заповненні списку колонок: {e}")
 
     def toggle_options(self, choice):
         for widget in [
@@ -329,10 +341,17 @@ class SamplingApp:
             self.preprocess_label.grid_remove()
 
     def create_sample(self):
+        self.create_button.config(state=tk.DISABLED)
+        self.status_label.config(text="Створення вибірки...")
         threading.Thread(target=self._create_sample).start()
 
     def _create_sample(self):
         sample = None
+
+        def on_finish():
+            self.create_button.config(state=tk.NORMAL)
+            self.status_label.config(text="")
+
         try:
             choice = self.choice_var.get()
             file_path = self.file_path_entry.get()
@@ -341,7 +360,8 @@ class SamplingApp:
                 raise ValueError("Не обрано файл з генеральною сукупністю.")
             population = pd.read_csv(file_path)
             self.data = population
-            logger.debug(f"Завантажено популяцію розміром {len(population)}")
+            logger.debug(
+                f"Завантажено популяцію розміром {len(population)}")
 
             if sample_size <= 0 or sample_size > len(population):
                 raise ValueError("Некоректний розмір вибірки.")
@@ -377,7 +397,8 @@ class SamplingApp:
                 threshold = float(self.threshold_entry.get()
                                   ) if self.use_threshold_var.get() else None
                 if threshold is not None and threshold < 0:
-                    raise ValueError("Порогове значення має бути невід'ємним.")
+                    raise ValueError(
+                        "Порогове значення має бути невід'ємним.")
                 strata_column = self.mus_strata_column_combobox.get(
                 ) if self.use_stratify_var.get() else None
                 if strata_column is not None and strata_column not in population.columns:
@@ -426,7 +447,8 @@ class SamplingApp:
             sample_output_path = f"{file_name}_{sample_type}_sample.csv"
             population_output_path = f"{file_name}_{sample_type}_population.csv"
 
-            population_with_results.to_csv(population_output_path, index=False)
+            population_with_results.to_csv(
+                population_output_path, index=False)
             sample.to_csv(sample_output_path, index=False)
 
             # Генерация графиков
@@ -447,8 +469,6 @@ class SamplingApp:
                 chart_paths.append(strata_chart_path)
 
             if choice == 4:
-                cumulative_chart_path = f"{file_name}_{sample_type}_cumulative_chart"
-
                 base_cumulative_chart_path = f"{file_name}_{sample_type}_cumulative_chart"
                 create_cumulative_chart(
                     population_with_results,
@@ -474,7 +494,8 @@ class SamplingApp:
 
             if choice in (7, 9):
                 base_optuna_results_path = f"{file_name}_{sample_type}_optuna_results"
-                visualize_optuna_results(best_study, base_optuna_results_path)
+                visualize_optuna_results(
+                    best_study, base_optuna_results_path)
                 pattern = f"{file_name}_{sample_type}_optuna_results*.png"
                 optuna_result_files = glob.glob(pattern)
                 chart_paths.extend(optuna_result_files)
@@ -497,7 +518,7 @@ class SamplingApp:
             )
 
             # Добавление описаний методов
-            if self.preprocessing_method_description:
+            if choice in (5, 6, 7, 8, 9) and self.preprocessing_method_description:
                 flowables.append(
                     Paragraph("Description of data preprocessing methods:", styles['Heading2']))
                 formatted_preprocess_desc = convert_newlines(
@@ -531,15 +552,20 @@ class SamplingApp:
             # Сохранение PDF
             doc.build(flowables)
 
-            self.result_label.config(
-                text=f"The sample is saved to the file: {output_path}\n"
-            )
+            # Обновление интерфейса после успешного выполнения
+            self.root.after(0, lambda: self.result_label.config(
+                text=f"The sample is saved to the file: {output_path}\n"))
+
         except ValueError as e:
-            messagebox.showerror("Помилка", str(e))
+            self.root.after(
+                0, lambda e=e: messagebox.showerror("Помилка", str(e)))
         except Exception as e:
             logger.exception("Несподівана помилка")
-            messagebox.showerror(
-                "Помилка", f"Сталася несподівана помилка: {e}")
+            self.root.after(
+                0, lambda e=e: messagebox.showerror(
+                    "Помилка", f"Сталася несподівана помилка: {e}"))
+        finally:
+            self.root.after(0, on_finish)
 
 
 def main():

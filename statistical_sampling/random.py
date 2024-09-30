@@ -20,19 +20,30 @@ def random_sampling(
     Perform random sampling on a DataFrame based on indices.
 
     Parameters:
-        population (pd.DataFrame): DataFrame containing the population.
-        sample_size (int): The number of records to select in the sample.
-        random_seed (Optional[int]): Random seed for reproducibility. Default is None.
+    -----------
+    population : pd.DataFrame
+        DataFrame containing the population to sample from.
+    sample_size : int
+        The number of records to select in the sample.
+    random_seed : Optional[int], optional
+        Random seed for reproducibility. Default is None.
 
     Returns:
-        Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame], str]:
-            - The updated DataFrame with a new 'is_sample' column indicating the sample selection.
-            - A DataFrame containing the selected sample.
-            - A string describing the sampling method and details.
+    --------
+    Tuple containing:
+        - population_updated : pd.DataFrame
+          The updated DataFrame with a new 'is_sample' column indicating the sample selection.
+        - sample : pd.DataFrame
+          A DataFrame containing the selected sample.
+        - method_description : str
+          A string describing the sampling method and details.
 
     Raises:
-        ValueError: If the sample size is greater than the population size.
-        TypeError: If the population is not a valid DataFrame.
+    -------
+    ValueError:
+        If the sample size is greater than the population size.
+    TypeError:
+        If the population is not a valid DataFrame.
     """
     try:
         # Make a copy of the population to avoid modifying the original DataFrame

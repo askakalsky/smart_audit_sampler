@@ -25,23 +25,38 @@ def monetary_unit_sampling(
     Perform Monetary Unit Sampling (MUS) on a population.
 
     Parameters:
-        population (pd.DataFrame): DataFrame containing the population to sample from.
-        sample_size (int): Number of records to select in the sample.
-        value_column (str): The column representing the monetary value to base the sampling on.
-        threshold (Optional[float], default=None): Minimum value in the value_column to include in the sample.
-        strata_column (Optional[str], default=None): Optional column for stratified sampling.
-        random_seed (Optional[int], default=None): Random seed for reproducibility.
+    -----------
+    population : pd.DataFrame
+        DataFrame containing the population to sample from.
+    sample_size : int
+        Number of records to select in the sample.
+    value_column : str
+        The column representing the monetary value to base the sampling on.
+    threshold : Optional[float], optional
+        Minimum value in the `value_column` to include in the sample. Default is None.
+    strata_column : Optional[str], optional
+        Optional column for stratified sampling. Default is None.
+    random_seed : Optional[int], optional
+        Random seed for reproducibility. Default is None.
 
     Returns:
-        Tuple[pd.DataFrame, pd.DataFrame, str]:
-            - Updated population DataFrame with is_sample column.
-            - Sample DataFrame containing the selected records.
-            - Method description string summarizing the sampling procedure.
+    --------
+    Tuple containing:
+        - population_updated : pd.DataFrame
+          Updated population DataFrame with an "is_sample" column indicating sampled records.
+        - sample : pd.DataFrame
+          DataFrame containing the selected records.
+        - method_description : str
+          String summarizing the sampling procedure.
 
     Raises:
-        KeyError: If required columns are missing in the DataFrame.
-        ValueError: If no records remain after applying the threshold.
-        TypeError: If the input data types are incorrect.
+    -------
+    KeyError:
+        If required columns are missing in the DataFrame.
+    ValueError:
+        If no records remain after applying the threshold.
+    TypeError:
+        If the input data types are incorrect.
     """
     try:
         # Validate that the population is a DataFrame
@@ -88,12 +103,18 @@ def monetary_unit_sampling(
             Sample a stratum based on the cumulative monetary value.
 
             Parameters:
-                group (pd.DataFrame): The group or stratum of the population to sample from.
-                stratum_sample_size (int): The number of records to sample from this stratum.
-                random_seed (Optional[int]): Seed for reproducibility of random sampling.
+            -----------
+            group : pd.DataFrame
+                The group or stratum of the population to sample from.
+            stratum_sample_size : int
+                The number of records to sample from this stratum.
+            random_seed : Optional[int]
+                Seed for reproducibility of random sampling.
 
             Returns:
-                pd.DataFrame: A DataFrame containing the sampled records from the stratum.
+            --------
+            pd.DataFrame
+                A DataFrame containing the sampled records from the stratum.
             """
             # If the stratum size is less than or equal to the required sample size, return the whole group
             if len(group) <= stratum_sample_size:

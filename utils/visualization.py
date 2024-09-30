@@ -24,16 +24,25 @@ def create_strata_chart(
     """
     Creates a bar chart comparing the distribution of different strata in the population and the sample.
 
-    Args:
-        population (pd.DataFrame): The full dataset containing the population.
-        sample (pd.DataFrame): The sampled subset of the population.
-        strata_column (str): The column in the DataFrame that defines the strata.
-        output_path (str): The path where the output chart image will be saved.
-        threshold (Optional[float]): If provided, filter the population by this threshold on the `value_column`.
-        value_column (Optional[str]): The column on which the threshold will be applied.
+    Parameters:
+    -----------
+    population : pd.DataFrame
+        The full dataset containing the population.
+    sample : pd.DataFrame
+        The sampled subset of the population.
+    strata_column : str
+        The column in the DataFrame that defines the strata.
+    output_path : str
+        The path where the output chart image will be saved.
+    threshold : Optional[float], optional
+        If provided, filters the population by this threshold on the `value_column`.
+    value_column : Optional[str], optional
+        The column on which the threshold will be applied.
 
     Returns:
-        None. Saves the chart to the provided output path.
+    --------
+    None
+        The bar chart is saved to the specified output path.
     """
     # Apply threshold to population if provided
     if threshold is not None and value_column is not None:
@@ -68,6 +77,7 @@ def create_strata_chart(
     plt.xlabel('Strata')
     plt.ylabel('Percentage')
     plt.title('Comparison of Strata Sizes in Population and Sample')
+    plt.grid(True)
     plt.xticks(x_coords, sorted_strata, rotation=45, ha='right')
     plt.legend()
     plt.tight_layout()
@@ -86,15 +96,23 @@ def create_cumulative_chart(
     """
     Creates a cumulative chart based on monetary values in the population and highlights selected samples.
 
-    Args:
-        population (pd.DataFrame): The full dataset containing the population.
-        value_column (str): The column in the DataFrame representing the monetary value to accumulate.
-        strata_column (Optional[str]): The column representing strata. If provided, stratified cumulative charts will be created.
-        output_path (str): The path where the output chart image will be saved.
-        threshold (Optional[float]): If provided, filter the population by this threshold on the `value_column`.
+    Parameters:
+    -----------
+    population : pd.DataFrame
+        The full dataset containing the population.
+    value_column : str
+        The column in the DataFrame representing the monetary value to accumulate.
+    strata_column : Optional[str], optional
+        The column representing strata. If provided, stratified cumulative charts will be created.
+    output_path : str
+        The path where the output chart image will be saved.
+    threshold : Optional[float], optional
+        If provided, filters the population by this threshold on the `value_column`.
 
     Returns:
-        None. Saves the chart to the provided output path.
+    --------
+    None
+        The cumulative chart is saved to the specified output path.
     """
     # Apply threshold to population if provided
     if threshold is not None:
@@ -149,6 +167,7 @@ def create_cumulative_chart(
             plt.xlabel('Elements in Stratum (sorted by monetary value)')
             plt.ylabel('Cumulative Sum of Monetary Values')
             plt.title(f'Cumulative Chart for Stratum {stratum}')
+            plt.grid(True)
             plt.legend()
 
             stratum_output_path = f"{output_path}_stratum_{stratum}.png"
@@ -200,15 +219,23 @@ def create_umap_projection(population: pd.DataFrame, label_column: str, features
     """
     Creates a UMAP projection to visualize high-dimensional data and labels (anomalies or clusters).
 
-    Args:
-        population (pd.DataFrame): The dataset containing the features and labels.
-        label_column (str): The column representing the labels (e.g., anomalies).
-        features (List[str]): The list of features to include in the UMAP projection.
-        output_path (str): The path where the UMAP plot will be saved.
-        cluster_column (Optional[str]): Optional column representing cluster assignments. If provided, clusters will be shown on the plot.
+    Parameters:
+    -----------
+    population : pd.DataFrame
+        The dataset containing the features and labels to be visualized.
+    label_column : str
+        The column representing the labels (e.g., anomalies) for coloring the data points.
+    features : List[str]
+        The list of features to include in the UMAP projection.
+    output_path : str
+        The path where the UMAP plot will be saved.
+    cluster_column : Optional[str], optional
+        Optional column representing cluster assignments. If provided, clusters will be shown on the plot.
 
     Returns:
-        None. Saves the UMAP projection chart to the provided output path.
+    --------
+    None
+        The UMAP projection chart is saved to the specified output path.
     """
     population = population.copy()
 
@@ -281,12 +308,17 @@ def plot_optimization_history(study, output_dir):
     """
     Plots the optimization history of an Optuna study.
 
-    Args:
-        study (optuna.Study): The Optuna study object containing the optimization results.
-        output_dir (str): Directory path to save the optimization history plot.
+    Parameters:
+    -----------
+    study : optuna.Study
+        The Optuna study object containing the optimization results.
+    output_dir : str
+        Directory path where the optimization history plot will be saved.
 
     Returns:
-        None. Saves the optimization history plot to the provided output path.
+    --------
+    None
+        The optimization history plot is saved to the specified output directory.
     """
     trials = study.trials
     values = [t.value for t in trials if t.value is not None]
@@ -304,12 +336,17 @@ def plot_param_importances(study, output_dir):
     """
     Plots the parameter importances from an Optuna study.
 
-    Args:
-        study (optuna.Study): The Optuna study object containing the parameter importances.
-        output_dir (str): Directory path to save the parameter importance plot.
+    Parameters:
+    -----------
+    study : optuna.Study
+        The Optuna study object containing the parameter importances.
+    output_dir : str
+        Directory path where the parameter importance plot will be saved.
 
     Returns:
-        None. Saves the parameter importance plot to the provided output path.
+    --------
+    None
+        The parameter importance plot is saved to the specified output directory.
     """
     importances = get_param_importances(study)
     params = list(importances.keys())
@@ -327,12 +364,17 @@ def plot_parallel_coordinate(study, output_dir):
     """
     Plots the parallel coordinate plot for the Optuna study results.
 
-    Args:
-        study (optuna.Study): The Optuna study object containing the trial data.
-        output_dir (str): Directory path to save the parallel coordinate plot.
+    Parameters:
+    -----------
+    study : optuna.Study
+        The Optuna study object containing the trial data.
+    output_dir : str
+        Directory path where the parallel coordinate plot will be saved.
 
     Returns:
-        None. Saves the parallel coordinate plot to the provided output path.
+    --------
+    None
+        The parallel coordinate plot is saved to the specified output directory.
     """
     trials = study.trials
     df = pd.DataFrame([{
@@ -351,12 +393,17 @@ def plot_slice(study, output_dir):
     """
     Plots the slice plot for each parameter in the Optuna study results.
 
-    Args:
-        study (optuna.Study): The Optuna study object containing the trial data.
-        output_dir (str): Directory path to save the slice plots.
+    Parameters:
+    -----------
+    study : optuna.Study
+        The Optuna study object containing the trial data.
+    output_dir : str
+        Directory path where the slice plots will be saved.
 
     Returns:
-        None. Saves the slice plots to the provided output path.
+    --------
+    None
+        The slice plots are saved to the specified output directory.
     """
     trials = study.trials
     df = pd.DataFrame([{
@@ -379,12 +426,17 @@ def visualize_optuna_results(study, output_dir):
     """
     Generates and saves a set of visualization plots for an Optuna study.
 
-    Args:
-        study (optuna.Study): The Optuna study object containing the optimization results.
-        output_dir (str): Directory path where the plots will be saved.
+    Parameters:
+    -----------
+    study : optuna.Study
+        The Optuna study object containing the optimization results.
+    output_dir : str
+        Directory path where the plots will be saved.
 
     Returns:
-        None. Saves all the generated plots to the provided output path.
+    --------
+    None
+        All generated plots are saved to the specified output directory.
     """
     try:
         plot_optimization_history(study, output_dir)
@@ -401,13 +453,19 @@ def get_available_features(population: pd.DataFrame, features: List[str]) -> Lis
     """
     Identifies and returns the available features from the given list in the DataFrame.
 
-    Args:
-        population (pd.DataFrame): The dataset containing the columns.
-        features (List[str]): List of features to check for availability in the DataFrame.
+    Parameters:
+    -----------
+    population : pd.DataFrame
+        The dataset containing the columns.
+    features : List[str]
+        List of features to check for availability in the DataFrame.
 
     Returns:
-        List[str]: A list of available features found in the DataFrame.
+    --------
+    List[str]
+        A list of available features found in the DataFrame.
     """
+
     available_features = [f for f in features if f in population.columns]
     missing_features = set(features) - set(available_features)
     for feature in missing_features:

@@ -16,10 +16,14 @@ class FlexibleAutoencoder(nn.Module):
         """
         Flexible autoencoder architecture with an additional hidden layer.
 
-        Args:
-            input_dim (int): Number of input features.
-            hidden_dim (int, optional): Size of the hidden layer. Default is 64.
-            bottleneck_dim (int, optional): Size of the bottleneck layer. Default is 3.
+        Parameters:
+        -----------
+        input_dim : int
+            Number of input features.
+        hidden_dim : int, optional
+            Size of the hidden layer. Default is 64.
+        bottleneck_dim : int, optional
+            Size of the bottleneck layer. Default is 3.
         """
         super(FlexibleAutoencoder, self).__init__()
 
@@ -60,20 +64,32 @@ class FlexibleAutoencoder(nn.Module):
 def autoencoder_sampling(data: pd.DataFrame, data_preprocessed: pd.DataFrame, sample_size: int,
                          features: list, random_seed: int):
     """
-    Function to perform anomaly detection using flexible autoencoder sampling (Realization #2).
+    Anomaly detection using flexible autoencoder sampling.
 
-    Args:
-        data (pd.DataFrame): Original dataset.
-        data_preprocessed (pd.DataFrame): Preprocessed dataset (used for training).
-        sample_size (int): Number of samples to return in the final selection.
-        features (list): List of feature names (numerical and categorical).
-        random_seed (int): Random seed for reproducibility.
+    Parameters:
+    -----------
+    data : pd.DataFrame
+        Original dataset to be processed.
+    data_preprocessed : pd.DataFrame
+        Preprocessed dataset used for training the autoencoder.
+    sample_size : int
+        Number of samples to return in the final selection.
+    features : list
+        List of feature names, including both numerical and categorical features.
+    random_seed : int
+        Random seed for reproducibility.
 
     Returns:
-        population_with_results (pd.DataFrame): Original data with additional fields "is_sample" and "anomaly_score".
-        population_for_chart (pd.DataFrame): Preprocessed data with additional fields "is_sample" and "anomaly_score".
-        sample (pd.DataFrame): Sampled data with "is_sample" == 1, size equals to sample_size.
-        method_description (str): Description of the autoencoder architecture and details.
+    --------
+    Tuple containing:
+        - population_with_results : pd.DataFrame
+          Original dataset with added fields "is_sample" and "anomaly_score".
+        - population_for_chart : pd.DataFrame
+          Preprocessed dataset with added fields "is_sample" and "anomaly_score".
+        - sample : pd.DataFrame
+          Sampled data where "is_sample" equals 1, with size equal to `sample_size`.
+        - method_description : str
+          Description of the autoencoder architecture and its details.
     """
     try:
         # Make copies to avoid modifying the original DataFrames

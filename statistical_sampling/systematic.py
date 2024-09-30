@@ -21,19 +21,30 @@ def systematic_sampling(
     Perform systematic sampling from a population.
 
     Parameters:
-        population (pd.DataFrame): DataFrame containing the population to sample from.
-        sample_size (int): Number of records to select in the sample.
-        random_seed (Optional[int], default=None): Random seed for reproducibility.
+    -----------
+    population : pd.DataFrame
+        DataFrame containing the population to sample from.
+    sample_size : int
+        Number of records to select in the sample.
+    random_seed : Optional[int], optional
+        Random seed for reproducibility. Default is None.
 
     Returns:
-        Tuple[pd.DataFrame, pd.DataFrame, str]:
-            - Updated population DataFrame with an 'is_sample' column.
-            - Sample DataFrame containing the selected records.
-            - Method description string summarizing the sampling procedure.
+    --------
+    Tuple containing:
+        - population_updated : pd.DataFrame
+          Updated population DataFrame with an 'is_sample' column indicating the sampled records.
+        - sample : pd.DataFrame
+          Sample DataFrame containing the selected records.
+        - method_description : str
+          Method description string summarizing the sampling procedure.
 
     Raises:
-        ValueError: If the sample size is greater than the population size.
-        TypeError: If the input data types are incorrect.
+    -------
+    ValueError:
+        If the sample size is greater than the population size.
+    TypeError:
+        If the input data types are incorrect.
     """
     try:
         # Ensure population is a DataFrame
