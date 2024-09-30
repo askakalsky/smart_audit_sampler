@@ -97,6 +97,7 @@ def hdbscan_sampling(
         population['cluster'] = labels
         population['is_anomaly'] = (labels == -1).astype(int)
         population['is_sample'] = 0
+        num_clusters = max(population_original['cluster']) + 1
 
         # Identify anomalies
         anomalies = population_original[population_original['is_anomaly'] == 1]
@@ -114,22 +115,24 @@ def hdbscan_sampling(
         # Mark the sampled data
         population_original.loc[sample_processed.index, 'is_sample'] = 1
         population.loc[sample_processed.index, 'is_sample'] = 1
+        sample_processed['is_sample'] = 1
 
         # Total population size and the number of anomalies detected
         total_anomalies = len(anomalies)
         population_size = len(population_original)
 
         method_description = (
-            f"**SAMPLING**\n"
             f"Sampling using HDBSCAN with automatic hyperparameter tuning (Optuna).\n"
             f"{warning_message}\n"
             f"Number of sampled anomalies: {len(sample_processed)}.\n"
             f"Number of detected anomalies: {total_anomalies}.\n"
             f"Total population size: {population_size}.\n"
-            f"Used features: {features}.\n"
+            f"Number of clusters: {num_clusters}.\n"
+            f"Features: {features}.\n"
             f"Best parameters: {best_params}.\n"
-            f"Sample creation date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n"
+            f"Sample creation date and time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n"
             f"Random seed: {random_seed}.\n"
+            f"Number of trials: {len(study.trials)}.\n"
         )
 
         return population_original, population, sample_processed, method_description, study

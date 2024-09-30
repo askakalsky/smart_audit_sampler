@@ -35,6 +35,9 @@ def random_sampling(
         TypeError: If the population is not a valid DataFrame.
     """
     try:
+        # Make a copy of the population to avoid modifying the original DataFrame
+        population = population.copy()
+
         # Check if population is a DataFrame
         if not isinstance(population, pd.DataFrame):
             raise TypeError(
@@ -57,7 +60,6 @@ def random_sampling(
 
         # Create the sampling method description
         method_description = (
-            f"**SAMPLING**\n"
             f"Sampling method: Random Sampling.\n"
             f"Total population size: {len(population)}.\n"
             f"Sample size: {sample_size}.\n"

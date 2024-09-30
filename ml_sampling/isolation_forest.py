@@ -79,7 +79,6 @@ def isolation_forest_sampling(
 
         # Create method description
         method_description = (
-            f"**SAMPLING**\n"
             f"Sampling based on Isolation Forest with default hyperparameters.\n"
             f"Sample size: {sample_size}.\n"
             f"Requested features: {features}.\n"

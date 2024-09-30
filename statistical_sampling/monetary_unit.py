@@ -190,7 +190,6 @@ def monetary_unit_sampling(
 
         # Start forming the method description
         method_description = (
-            f"**SAMPLING**\n"
             f"Sampling method: Monetary Unit Sampling.\n"
             f"Total population size: {total_population_size}.\n"
             f"Total population value: {total_population_value}.\n"

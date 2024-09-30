@@ -53,7 +53,7 @@ def kmeans_sampling(
           The Optuna study object that contains the results of hyperparameter optimization.
     """
     try:
-        # Copy the original data to avoid in-place modifications
+        # Make copies to avoid modifying the original DataFrames
         population_original = population_original.copy()
         population = population.copy()
 
@@ -115,6 +115,7 @@ def kmeans_sampling(
         population_original['is_sample'] = population['is_sample'] = 0
         population_original.loc[sample_processed.index, 'is_sample'] = 1
         population.loc[sample_processed.index, 'is_sample'] = 1
+        sample_processed['is_sample'] = 1
 
         # Total population size and number of clusters
         population_size = len(population_original)
@@ -122,7 +123,6 @@ def kmeans_sampling(
 
         # Method description
         method_description = (
-            f"**SAMPLING**\n"
             f"K-Means sampling with hyperparameter optimization using Optuna.\n"
             f"Sample size: {sample_size}.\n"
             f"Total population size: {population_size}.\n"

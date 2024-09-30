@@ -43,7 +43,7 @@ def preprocess_data(df: pd.DataFrame,
         # Make a copy of the DataFrame to avoid modifying the original
         df_processed = df.copy()
 
-        method_description = "**PREPROCESSING**\n"  # Initialize method description log
+        method_description = ""
 
         # Apply sampling if necessary
         if sample_fraction < 1.0:

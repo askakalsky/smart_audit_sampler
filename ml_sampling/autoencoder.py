@@ -76,6 +76,10 @@ def autoencoder_sampling(data: pd.DataFrame, data_preprocessed: pd.DataFrame, sa
         method_description (str): Description of the autoencoder architecture and details.
     """
     try:
+        # Make copies to avoid modifying the original DataFrames
+        data = data.copy()
+        data_preprocessed = data_preprocessed.copy()
+
         # Set random seed for reproducibility
         torch.manual_seed(random_seed)
         np.random.seed(random_seed)
@@ -150,7 +154,6 @@ def autoencoder_sampling(data: pd.DataFrame, data_preprocessed: pd.DataFrame, sa
 
         # Method description for logging
         method_description = (
-            f"**SAMPLING**\n"
             f"Autoencoder architecture: Flexible with 2 hidden layers (LeakyReLU activation), "
             f"input_dim = {input_dim}, hidden_dim = 64, bottleneck_dim = 3.\n"
             f"Trained on {total_population_size} records with {num_features} features.\n"

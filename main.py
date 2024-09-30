@@ -1,7 +1,6 @@
 import os
 import random
 import logging
-import datetime
 import pandas as pd
 import tkinter as tk
 from tkinter import filedialog, ttk, messagebox
@@ -16,6 +15,13 @@ from statistical_sampling.stratified import stratified_sampling
 from statistical_sampling.monetary_unit import monetary_unit_sampling
 from utils.visualization import create_strata_chart, create_cumulative_chart, create_umap_projection, visualize_optuna_results
 from utils.preprocessing import preprocess_data
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+import glob
+import threading
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
@@ -323,6 +329,9 @@ class SamplingApp:
             self.preprocess_label.grid_remove()
 
     def create_sample(self):
+        threading.Thread(target=self._create_sample).start()
+
+    def _create_sample(self):
         sample = None
         try:
             choice = self.choice_var.get()
@@ -410,23 +419,18 @@ class SamplingApp:
 
             file_name, file_ext = os.path.splitext(file_path)
             sample_type = method_info['name_en'].lower().replace(' ', '_')
-            output_path = f"{file_name}_{sample_type}"
-            sample_output_path = f"{output_path}_sample.csv"
-            population_output_path = f"{output_path}_population.csv"
+            # Изменение расширения на .pdf
+            output_path = f"{file_name}_{sample_type}.pdf"
+
+            # Сохранение выборки и популяции в CSV (при необходимости)
+            sample_output_path = f"{file_name}_{sample_type}_sample.csv"
+            population_output_path = f"{file_name}_{sample_type}_population.csv"
 
             population_with_results.to_csv(population_output_path, index=False)
             sample.to_csv(sample_output_path, index=False)
 
-            log_filename = f"{output_path}_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
-            with open(log_filename, "w", encoding='utf-8') as log_file:
-                if self.preprocessing_method_description:
-                    log_file.write(
-                        f"{self.preprocessing_method_description}\n")
-
-                if sampling_method_description:
-                    log_file.write(f"{sampling_method_description}\n")
-
-            # Check if threshold and value_column are defined before passing them
+            # Генерация графиков
+            chart_paths = []
             threshold = threshold if 'threshold' in locals() else None
             value_column = value_column if 'value_column' in locals() else None
 
@@ -440,16 +444,22 @@ class SamplingApp:
                     threshold=threshold,
                     value_column=value_column
                 )
+                chart_paths.append(strata_chart_path)
 
             if choice == 4:
-                cumulative_chart_path = f"{file_name}_{sample_type}_cumulative_chart.png"
+                cumulative_chart_path = f"{file_name}_{sample_type}_cumulative_chart"
+
+                base_cumulative_chart_path = f"{file_name}_{sample_type}_cumulative_chart"
                 create_cumulative_chart(
                     population_with_results,
                     value_column,
                     strata_column if self.use_stratify_var.get() else None,
-                    cumulative_chart_path,
+                    base_cumulative_chart_path,
                     threshold=threshold
                 )
+                pattern = f"{file_name}_{sample_type}_cumulative_chart*.png"
+                cumulative_chart_files = glob.glob(pattern)
+                chart_paths.extend(cumulative_chart_files)
 
             if choice in (5, 6, 7, 8, 9):
                 umap_projection_path = f"{file_name}_{sample_type}_umap_projection.png"
@@ -460,12 +470,69 @@ class SamplingApp:
                     umap_projection_path,
                     'cluster'
                 )
+                chart_paths.append(umap_projection_path)
+
             if choice in (7, 9):
-                optuna_results_path = f"{file_name}_{sample_type}"
-                visualize_optuna_results(best_study, optuna_results_path)
+                base_optuna_results_path = f"{file_name}_{sample_type}_optuna_results"
+                visualize_optuna_results(best_study, base_optuna_results_path)
+                pattern = f"{file_name}_{sample_type}_optuna_results*.png"
+                optuna_result_files = glob.glob(pattern)
+                chart_paths.extend(optuna_result_files)
+
+            # Создание PDF
+            doc = SimpleDocTemplate(output_path, pagesize=A4)
+            styles = getSampleStyleSheet()
+            flowables = []
+
+            # Функция для преобразования текста с \n в <br/>
+            def convert_newlines(text):
+                return text.replace('\n', '<br/>')
+
+            # Пользовательский стиль для параграфов с разрывами строк
+            custom_style = ParagraphStyle(
+                'Custom',
+                parent=styles['Normal'],
+                spaceAfter=12,
+                leading=15
+            )
+
+            # Добавление описаний методов
+            if self.preprocessing_method_description:
+                flowables.append(
+                    Paragraph("Description of data preprocessing methods:", styles['Heading2']))
+                formatted_preprocess_desc = convert_newlines(
+                    self.preprocessing_method_description)
+                flowables.append(
+                    Paragraph(formatted_preprocess_desc, custom_style))
+                flowables.append(Spacer(1, 12))
+
+            if sampling_method_description:
+                flowables.append(
+                    Paragraph("Description of the sampling method:", styles['Heading2']))
+                formatted_sampling_desc = convert_newlines(
+                    sampling_method_description)
+                flowables.append(
+                    Paragraph(formatted_sampling_desc, custom_style))
+                flowables.append(Spacer(1, 12))
+
+            # Добавление графиков
+            for chart_path in chart_paths:
+                if os.path.exists(chart_path):
+                    flowables.append(
+                        Paragraph(f"Chart: {os.path.basename(chart_path)}", styles['Heading3']))
+                    img = Image(chart_path, width=6*inch, height=4*inch)
+                    flowables.append(img)
+                    flowables.append(Spacer(1, 12))
+                else:
+                    flowables.append(Paragraph(
+                        f"Chart {os.path.basename(chart_path)} not found.", styles['Normal']))
+                    flowables.append(Spacer(1, 12))
+
+            # Сохранение PDF
+            doc.build(flowables)
 
             self.result_label.config(
-                text=f"Вибірка збережена у файл: {output_path}\n"
+                text=f"The sample is saved to the file: {output_path}\n"
             )
         except ValueError as e:
             messagebox.showerror("Помилка", str(e))

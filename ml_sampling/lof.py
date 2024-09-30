@@ -86,7 +86,6 @@ def lof_sampling(
 
         # Create method description
         method_description = (
-            f"**SAMPLING**\n"
             f"Method: Local Outlier Factor (LOF) with default parameters.\n"
             f"Sample size: {sample_size}.\n"
             f"Total population size: {population_size}.\n"

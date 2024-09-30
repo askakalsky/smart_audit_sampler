@@ -105,7 +105,6 @@ def stratified_sampling(
 
         # Create method description
         method_description = (
-            f"**SAMPLING**\n"
             f"Sampling method: Stratified sampling.\n"
             f"Total population size: {len(population)}.\n"
             f"Sample size: {sample_size}.\n"
