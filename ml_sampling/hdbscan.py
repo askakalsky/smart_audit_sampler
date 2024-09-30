@@ -45,7 +45,7 @@ def hdbscan_sampling(
         population_original = population_original.copy()
         population = population.copy()
 
-        # Initialize random number generator
+        # Initialize random number generator for reproducibility
         rng = np.random.default_rng(random_seed)
 
         def choose_algorithm(n_samples: int, n_features: int) -> str:
@@ -82,8 +82,9 @@ def hdbscan_sampling(
             clusterer = HDBSCAN(**params)
             return calculate_silhouette(clusterer, population)
 
-        # Run Optuna optimization
-        study = optuna.create_study(direction='maximize')
+        # Run Optuna optimization with random seed for reproducibility
+        study = optuna.create_study(
+            direction='maximize', sampler=optuna.samplers.TPESampler(seed=random_seed))
         study.optimize(objective, n_trials=100, show_progress_bar=True)
         best_params = study.best_params
         best_clusterer = HDBSCAN(**best_params)
@@ -92,10 +93,10 @@ def hdbscan_sampling(
         # Annotate clusters and anomalies
         population_original['cluster'] = labels
         population_original['is_anomaly'] = (labels == -1).astype(int)
-        population_original['is_sample'] = False
+        population_original['is_sample'] = 0
         population['cluster'] = labels
         population['is_anomaly'] = (labels == -1).astype(int)
-        population['is_sample'] = False
+        population['is_sample'] = 0
 
         # Identify anomalies
         anomalies = population_original[population_original['is_anomaly'] == 1]
@@ -111,15 +112,21 @@ def hdbscan_sampling(
             warning_message = f"Warning: Only {len(anomalies)} anomalies found, less than the requested sample size of {sample_size}."
 
         # Mark the sampled data
-        population_original.loc[sample_processed.index, 'is_sample'] = True
-        population.loc[sample_processed.index, 'is_sample'] = True
+        population_original.loc[sample_processed.index, 'is_sample'] = 1
+        population.loc[sample_processed.index, 'is_sample'] = 1
+
+        # Total population size and the number of anomalies detected
+        total_anomalies = len(anomalies)
+        population_size = len(population_original)
 
         method_description = (
+            f"**SAMPLING**\n"
             f"Sampling using HDBSCAN with automatic hyperparameter tuning (Optuna).\n"
             f"{warning_message}\n"
             f"Number of sampled anomalies: {len(sample_processed)}.\n"
+            f"Number of detected anomalies: {total_anomalies}.\n"
+            f"Total population size: {population_size}.\n"
             f"Used features: {features}.\n"
-            f"Table columns: {population.columns.tolist()}.\n"
             f"Best parameters: {best_params}.\n"
             f"Sample creation date: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n"
             f"Random seed: {random_seed}.\n"
@@ -127,9 +134,14 @@ def hdbscan_sampling(
 
         return population_original, population, sample_processed, method_description, study
 
-    except ValueError as e:
-        logger.error(f"ValueError: {e}", exc_info=True)
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"ValueError: {e}", None
+    except ValueError as ve:
+        logger.error(f"ValueError: {ve}")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"ValueError: {ve}", None
+
+    except KeyError as ke:
+        logger.error(f"KeyError: {ke}")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"KeyError: {ke}", None
+
     except Exception as e:
-        logger.error(f"Unexpected error: {e}", exc_info=True)
+        logger.exception(f"Unexpected error in kmeans_sampling: {e}")
         return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Unexpected error: {e}", None

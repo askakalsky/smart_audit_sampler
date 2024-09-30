@@ -49,8 +49,11 @@ def kmeans_sampling(
           Subset of the dataset containing the selected samples.
         - method_description : str
           Description of the sampling process and parameters used.
+        - study : optuna.Study
+          The Optuna study object that contains the results of hyperparameter optimization.
     """
     try:
+        # Copy the original data to avoid in-place modifications
         population_original = population_original.copy()
         population = population.copy()
 
@@ -63,19 +66,21 @@ def kmeans_sampling(
                 'max_iter': trial.suggest_int('max_iter', 100, 500)
             }
 
-            # Обучаем модель KMeans с текущими параметрами
+            # Fit KMeans with the current parameters
             kmeans = KMeans(random_state=random_seed, **params)
             kmeans.fit(population)
 
-            # Получаем метки кластеров
+            # Get cluster labels
             labels = kmeans.labels_
 
-            # Вычисляем Silhouette Score
+            # Calculate Calinski-Harabasz score for the current clustering
             score = calinski_harabasz_score(population, labels)
 
             return score
 
-        study = optuna.create_study(direction='maximize')
+        # Run Optuna optimization with the defined objective
+        study = optuna.create_study(
+            direction='maximize', sampler=optuna.samplers.TPESampler(seed=random_seed))
         study.optimize(objective, n_trials=100, show_progress_bar=True)
 
         # Best parameters after optimization
@@ -92,11 +97,11 @@ def kmeans_sampling(
         _, distances = pairwise_distances_argmin_min(
             population, best_kmeans.cluster_centers_)
 
-        # Теперь добавляем столбцы к оригинальным DataFrame
+        # Add columns for cluster assignment and distance to centroid
         population_original['distance_to_centroid'] = population['distance_to_centroid'] = distances
         population_original['cluster'] = population['cluster'] = clusters
 
-        # Оптимизированная выборка без полной сортировки (используем heapq.nlargest)
+        # Optimized sampling using largest distances
         if sample_size < len(population_original):
             largest_distances_indices = heapq.nlargest(
                 sample_size, range(len(distances)), distances.take)
@@ -106,31 +111,39 @@ def kmeans_sampling(
                 f"Requested sample size {sample_size} exceeds available data size {len(population_original)}. Using full data.")
             sample_processed = population_original
 
-        # Обновляем разметку выборки
-        population_original['is_sample'] = population['is_sample'] = False
-        population_original.loc[sample_processed.index, 'is_sample'] = True
-        population.loc[sample_processed.index, 'is_sample'] = True
+        # Mark the samples in both original and processed populations
+        population_original['is_sample'] = population['is_sample'] = 0
+        population_original.loc[sample_processed.index, 'is_sample'] = 1
+        population.loc[sample_processed.index, 'is_sample'] = 1
 
+        # Total population size and number of clusters
+        population_size = len(population_original)
+        num_clusters = best_params['n_clusters']
+
+        # Method description
         method_description = (
+            f"**SAMPLING**\n"
             f"K-Means sampling with hyperparameter optimization using Optuna.\n"
             f"Sample size: {sample_size}.\n"
+            f"Total population size: {population_size}.\n"
+            f"Number of clusters: {num_clusters}.\n"
             f"Features: {features}.\n"
             f"Best K-Means parameters: {best_params}.\n"
             f"Creation date and time: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}.\n"
             f"Random seed: {random_seed}.\n"
-            f"Trials: {len(study.trials)}.\n"
+            f"Number of trials: {len(study.trials)}.\n"
         )
 
         return population_original, population, sample_processed, method_description, study
 
     except ValueError as ve:
         logger.error(f"ValueError: {ve}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"ValueError: {ve}"
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"ValueError: {ve}", None
 
     except KeyError as ke:
         logger.error(f"KeyError: {ke}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"KeyError: {ke}"
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"KeyError: {ke}", None
 
     except Exception as e:
         logger.exception(f"Unexpected error in kmeans_sampling: {e}")
-        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Unexpected error: {e}"
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Unexpected error: {e}", None

@@ -34,17 +34,18 @@ class SamplingApp:
         self.choice_var = tk.IntVar(value=1)
         self.use_threshold_var = tk.IntVar(value=0)
         self.use_stratify_var = tk.IntVar(value=0)
+        self.preprocessing_method_description = ""
 
         self.sampling_methods = {
-            1: {"name": "Випадкова вибірка", "description": "кожен елемент генеральної сукупності має рівну ймовірність потрапити у вибірку."},
-            2: {"name": "Систематична вибірка", "description": "елементи вибираються з генеральної сукупності через рівні інтервали."},
-            3: {"name": "Стратифікована вибірка", "description": "генеральна сукупність ділиться на страти (групи), і з кожної страти формується випадкова вибірка."},
-            4: {"name": "Метод грошової одиниці", "description": "ймовірність вибору елемента пропорційна його грошовій величині. Використовується для оцінки сумарної величини помилок."},
-            5: {"name": "Isolation Forest", "description": "алгоритм для виявлення аномалій на основі випадкових лісів."},
-            6: {"name": "Local Outlier Factor (LOF)", "description": "метод для виявлення локальних аномалій у даних."},
-            7: {"name": "Кластеризація K-Means", "description": "групування даних за схожістю для виявлення незвичайних точок."},
-            8: {"name": "Автоенкодер", "description": "зменшення розмірності даних для виявлення відхилень через аналіз помилки відновлення."},
-            9: {"name": "HDBSCAN", "description": "знаходження аномалій, класифікуючи точки як шум, спираючись на їхню щільність і відстань до інших точок, що дозволяє виокремлювати викиди в даних."}
+            1: {"name_ua": "Випадкова вибірка", "name_en": "Random Sampling", "description": "кожен елемент генеральної сукупності має рівну ймовірність потрапити у вибірку."},
+            2: {"name_ua": "Систематична вибірка", "name_en": "Systematic Sampling", "description": "елементи вибираються з генеральної сукупності через рівні інтервали."},
+            3: {"name_ua": "Стратифікована вибірка", "name_en": "Stratified Sampling", "description": "генеральна сукупність ділиться на страти (групи), і з кожної страти формується випадкова вибірка."},
+            4: {"name_ua": "Метод грошової одиниці", "name_en": "Monetary Unit Sampling", "description": "ймовірність вибору елемента пропорційна його грошовій величині. Використовується для оцінки сумарної величини помилок."},
+            5: {"name_ua": "Isolation Forest", "name_en": "Isolation Forest", "description": "алгоритм для виявлення аномалій на основі випадкових лісів."},
+            6: {"name_ua": "Local Outlier Factor", "name_en": "Local Outlier Factor", "description": "метод для виявлення локальних аномалій у даних."},
+            7: {"name_ua": "Кластеризація K-Means", "name_en": "K-Means Clustering", "description": "групування даних за схожістю для виявлення незвичайних точок."},
+            8: {"name_ua": "Автоенкодер", "name_en": "Autoencoder", "description": "зменшення розмірності даних для виявлення відхилень через аналіз помилки відновлення."},
+            9: {"name_ua": "HDBSCAN", "name_en": "HDBSCAN", "description": "знаходження аномалій, класифікуючи точки як шум, спираючись на їхню щільність і відстань до інших точок, що дозволяє виокремлювати викиди в даних."}
         }
 
         self.create_widgets()
@@ -75,7 +76,7 @@ class SamplingApp:
         for value, method_info in self.sampling_methods.items():
             rb = tk.Radiobutton(
                 self.choice_frame,
-                text=f"{method_info['name']}: {method_info['description']}",
+                text=f"{method_info['name_ua']}: {method_info['description']}",
                 variable=self.choice_var,
                 value=value,
                 command=self.on_choice_change,
@@ -178,52 +179,73 @@ class SamplingApp:
             return
 
         def select_numerical_columns():
+            numerical_columns = [
+                col for col in self.data.columns if pd.api.types.is_numeric_dtype(self.data[col])]
+            if not numerical_columns:
+                messagebox.showerror(
+                    "Помилка", "У датафреймі немає числових колонок.")
+                return
+
             numerical_window = tk.Toplevel(self.root)
             numerical_window.title("Вибір числових колонок")
             tk.Label(numerical_window, text="Виберіть числові колонки:").pack(
-                anchor="w")
+                anchor="w", padx=10, pady=5)
+
             numerical_listbox = tk.Listbox(
-                numerical_window, selectmode=tk.MULTIPLE)
-            for col in self.data.columns:
+                numerical_window, selectmode=tk.MULTIPLE, width=50)
+            for col in numerical_columns:
                 numerical_listbox.insert(tk.END, col)
-            numerical_listbox.pack()
+            numerical_listbox.pack(padx=10, pady=5)
 
             def save_numerical_columns():
                 selected_indices = numerical_listbox.curselection()
-                self.numerical_columns = [self.data.columns[i]
+                self.numerical_columns = [numerical_columns[i]
                                           for i in selected_indices]
+                if not self.numerical_columns:
+                    messagebox.showwarning(
+                        "Попередження", "Не обрано жодної числової колонки.")
+                    return
                 numerical_window.destroy()
                 select_categorical_columns()
 
             save_button = ttk.Button(
                 numerical_window, text="Далі", command=save_numerical_columns)
-            save_button.pack()
+            save_button.pack(pady=10)
 
         def select_categorical_columns():
+            categorical_columns = [
+                col for col in self.data.columns if col not in self.numerical_columns]
+            if not categorical_columns:
+                messagebox.showinfo(
+                    "Інформація", "Усі колонки вибрано як числові. Категоріальних колонок немає.")
+                self.data_preprocessed, self.preprocessing_method_description = preprocess_data(
+                    self.data, self.numerical_columns, self.categorical_columns)
+                self.preprocess_label.grid(row=99, column=0, sticky="w")
+                return
+
             categorical_window = tk.Toplevel(self.root)
             categorical_window.title("Вибір категоріальних колонок")
-            tk.Label(categorical_window,
-                     text="Виберіть категоріальні колонки:").pack(anchor="w")
+            tk.Label(categorical_window, text="Виберіть категоріальні колонки:").pack(
+                anchor="w", padx=10, pady=5)
+
             categorical_listbox = tk.Listbox(
-                categorical_window, selectmode=tk.MULTIPLE)
-            remaining_columns = [
-                col for col in self.data.columns if col not in self.numerical_columns]
-            for col in remaining_columns:
+                categorical_window, selectmode=tk.MULTIPLE, width=50)
+            for col in categorical_columns:
                 categorical_listbox.insert(tk.END, col)
-            categorical_listbox.pack()
+            categorical_listbox.pack(padx=10, pady=5)
 
             def save_categorical_columns():
                 selected_indices = categorical_listbox.curselection()
                 self.categorical_columns = [
-                    remaining_columns[i] for i in selected_indices]
-                self.data_preprocessed = preprocess_data(
+                    categorical_columns[i] for i in selected_indices]
+                self.data_preprocessed, self.preprocessing_method_description = preprocess_data(
                     self.data, self.numerical_columns, self.categorical_columns)
                 self.preprocess_label.grid(row=99, column=0, sticky="w")
                 categorical_window.destroy()
 
             save_button = ttk.Button(
                 categorical_window, text="Зберегти", command=save_categorical_columns)
-            save_button.pack()
+            save_button.pack(pady=10)
 
         select_numerical_columns()
 
@@ -323,17 +345,17 @@ class SamplingApp:
                 raise ValueError("Невідомий тип вибірки.")
 
             if choice == 1:
-                population_with_results, sample, method_description = random_sampling(
+                population_with_results, sample, sampling_method_description = random_sampling(
                     population, sample_size, random_seed)
             elif choice == 2:
-                population_with_results, sample, method_description = systematic_sampling(
+                population_with_results, sample, sampling_method_description = systematic_sampling(
                     population, sample_size, random_seed)
             elif choice == 3:
                 strata_column = self.strata_column_combobox.get()
                 if strata_column not in population.columns:
                     raise ValueError(
                         "Обрано неіснуючий стовпець для стратифікації.")
-                population_with_results, sample, method_description = stratified_sampling(
+                population_with_results, sample, sampling_method_description = stratified_sampling(
                     population, sample_size, strata_column, random_seed)
             elif choice == 4:
                 value_column = self.value_column_combobox.get()
@@ -354,7 +376,7 @@ class SamplingApp:
                         "Обрано неіснуючий стовпець для стратифікації.")
                 logger.debug(
                     f"Параметри методу грошової одиниці: value_column={value_column}, threshold={threshold}, strata_column={strata_column}")
-                population_with_results, sample, method_description = monetary_unit_sampling(
+                population_with_results, sample, sampling_method_description = monetary_unit_sampling(
                     population, sample_size, value_column, threshold, strata_column, random_seed)
             elif choice in (5, 6, 7, 8, 9):
                 if not self.numerical_columns and not self.categorical_columns:
@@ -365,29 +387,29 @@ class SamplingApp:
                         "Передобробка даних не виконана. Натисніть 'Вказати типи колонок' та збережіть вибір.")
                 features = self.numerical_columns + self.categorical_columns
                 if choice == 5:
-                    population_with_results, population_for_chart, sample, method_description = isolation_forest_sampling(
+                    population_with_results, population_for_chart, sample, sampling_method_description = isolation_forest_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 6:
-                    population_with_results, population_for_chart, sample, method_description = lof_sampling(
+                    population_with_results, population_for_chart, sample, sampling_method_description = lof_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 7:
-                    population_with_results, population_for_chart, sample, method_description, best_study = kmeans_sampling(
+                    population_with_results, population_for_chart, sample, sampling_method_description, best_study = kmeans_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 8:
-                    population_with_results, population_for_chart, sample, method_description = autoencoder_sampling(
+                    population_with_results, population_for_chart, sample, sampling_method_description = autoencoder_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
                 elif choice == 9:
-                    population_with_results, population_for_chart, sample, method_description, best_study = hdbscan_sampling(
+                    population_with_results, population_for_chart, sample, sampling_method_description, best_study = hdbscan_sampling(
                         self.data, self.data_preprocessed, sample_size, features, random_seed)
             else:
                 raise ValueError("Невідомий метод вибірки.")
 
             if sample is None or sample.empty:
                 raise ValueError(
-                    f"Не вдалося сформувати вибірку або вибірка порожня. {method_description}")
+                    f"Не вдалося сформувати вибірку або вибірка порожня. {sampling_method_description}")
 
             file_name, file_ext = os.path.splitext(file_path)
-            sample_type = method_info['name'].lower().replace(' ', '_')
+            sample_type = method_info['name_en'].lower().replace(' ', '_')
             output_path = f"{file_name}_{sample_type}"
             sample_output_path = f"{output_path}_sample.csv"
             population_output_path = f"{output_path}_population.csv"
@@ -395,23 +417,38 @@ class SamplingApp:
             population_with_results.to_csv(population_output_path, index=False)
             sample.to_csv(sample_output_path, index=False)
 
-            log_filename = f"{output_path}_sampling_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            log_filename = f"{output_path}_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
             with open(log_filename, "w", encoding='utf-8') as log_file:
-                log_file.write(
-                    f"1. Спосіб формування вибірки: {method_description}\n")
+                if self.preprocessing_method_description:
+                    log_file.write(
+                        f"{self.preprocessing_method_description}\n")
+
+                if sampling_method_description:
+                    log_file.write(f"{sampling_method_description}\n")
+
+            # Check if threshold and value_column are defined before passing them
+            threshold = threshold if 'threshold' in locals() else None
+            value_column = value_column if 'value_column' in locals() else None
 
             if choice in (3, 4) and 'strata_column' in locals() and strata_column:
-                strata_chart_path = output_path.replace(
-                    ".csv", "_strata_chart.png")
-                create_strata_chart(population_with_results, sample,
-                                    strata_column, strata_chart_path)
+                strata_chart_path = f"{file_name}_{sample_type}_strata_chart.png"
+                create_strata_chart(
+                    population_with_results,
+                    sample,
+                    strata_column,
+                    strata_chart_path,
+                    threshold=threshold,
+                    value_column=value_column
+                )
 
             if choice == 4:
                 cumulative_chart_path = f"{file_name}_{sample_type}_cumulative_chart.png"
                 create_cumulative_chart(
-                    population_with_results, sample, value_column,
+                    population_with_results,
+                    value_column,
                     strata_column if self.use_stratify_var.get() else None,
-                    cumulative_chart_path
+                    cumulative_chart_path,
+                    threshold=threshold
                 )
 
             if choice in (5, 6, 7, 8, 9):

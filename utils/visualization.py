@@ -1,76 +1,53 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import plotly.io as pio
 import umap
-
-# Standard libraries
-import os
-import random
 import logging
-import datetime
-import uuid
-
-# Data manipulation and analysis
-import numpy as np
 import pandas as pd
-import dask.dataframe as dd
-
-# Machine learning
-from sklearn.ensemble import IsolationForest
-from sklearn.neighbors import LocalOutlierFactor
-from sklearn.cluster import KMeans, HDBSCAN
-from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.model_selection import GridSearchCV, cross_val_score, KFold
-from sklearn.metrics import silhouette_score, pairwise_distances_argmin_min, average_precision_score, mean_squared_error, calinski_harabasz_score
-from sklearn.decomposition import PCA
-from sklearn.exceptions import NotFittedError
-from skopt import BayesSearchCV
-
-# Deep learning
-import torch
-import torch.nn as nn
-import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset, SubsetRandomSampler
-import torch.multiprocessing as mp
-from torch.cuda.amp import autocast, GradScaler
-
-# Visualization
 import matplotlib.pyplot as plt
-import plotly.io as pio
 import umap
-
-# GUI
-import tkinter as tk
-from tkinter import filedialog, ttk, messagebox
-
-# Optimization
-import optuna
-from optuna.samplers import TPESampler
-from optuna.pruners import MedianPruner
-import optuna.visualization as vis
 from optuna.importance import get_param_importances
-
-# Parallel processing
-from joblib import Parallel, delayed
-import joblib
-
-# Type hinting
-from typing import Optional, Tuple, List, Dict
-
-# Process control
-from tqdm import tqdm
+from typing import Optional, List
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 
-def create_strata_chart(population: pd.DataFrame, sample: pd.DataFrame, strata_column: str, output_path: str):
-    population_strata_stats = population[strata_column].value_counts(
+def create_strata_chart(
+    population: pd.DataFrame,
+    sample: pd.DataFrame,
+    strata_column: str,
+    output_path: str,
+    threshold: Optional[float] = None,
+    value_column: Optional[str] = None
+):
+    """
+    Creates a bar chart comparing the distribution of different strata in the population and the sample.
+
+    Args:
+        population (pd.DataFrame): The full dataset containing the population.
+        sample (pd.DataFrame): The sampled subset of the population.
+        strata_column (str): The column in the DataFrame that defines the strata.
+        output_path (str): The path where the output chart image will be saved.
+        threshold (Optional[float]): If provided, filter the population by this threshold on the `value_column`.
+        value_column (Optional[str]): The column on which the threshold will be applied.
+
+    Returns:
+        None. Saves the chart to the provided output path.
+    """
+    # Apply threshold to population if provided
+    if threshold is not None and value_column is not None:
+        population_filtered = population[population[value_column] >= threshold]
+    else:
+        population_filtered = population.copy()
+
+    # Compute strata statistics on the filtered population
+    population_strata_stats = population_filtered[strata_column].value_counts(
         normalize=True) * 100
     sample_strata_stats = sample[strata_column].value_counts(
         normalize=True) * 100
 
+    # Ensure that all strata are represented
     sorted_strata = population_strata_stats.sort_values(ascending=False).index
 
     population_percentages = [population_strata_stats[stratum]
@@ -82,14 +59,15 @@ def create_strata_chart(population: pd.DataFrame, sample: pd.DataFrame, strata_c
     bar_width = 0.35
     x_coords = range(len(sorted_strata))
 
+    # Plotting the population and sample strata side by side
     plt.bar([x - bar_width/2 for x in x_coords], population_percentages,
-            bar_width, label='Популяція', color='blue', alpha=0.7)
+            bar_width, label='Population', color='blue', alpha=0.7)
     plt.bar([x + bar_width/2 for x in x_coords], sample_percentages,
-            bar_width, label='Вибірка', color='red', alpha=0.7)
+            bar_width, label='Sample', color='red', alpha=0.7)
 
-    plt.xlabel('Страти')
-    plt.ylabel('Відсоток')
-    plt.title('Порівняння розмірів страт у популяції та вибірці')
+    plt.xlabel('Strata')
+    plt.ylabel('Percentage')
+    plt.title('Comparison of Strata Sizes in Population and Sample')
     plt.xticks(x_coords, sorted_strata, rotation=45, ha='right')
     plt.legend()
     plt.tight_layout()
@@ -98,27 +76,79 @@ def create_strata_chart(population: pd.DataFrame, sample: pd.DataFrame, strata_c
     plt.close()
 
 
-def create_cumulative_chart(population: pd.DataFrame, sample: pd.DataFrame, value_column: str, strata_column: Optional[str], output_path: str):
-    if strata_column and strata_column in population.columns:
-        for stratum, group in population.groupby(strata_column):
+def create_cumulative_chart(
+    population: pd.DataFrame,
+    value_column: str,
+    strata_column: Optional[str],
+    output_path: str,
+    threshold: Optional[float] = None
+):
+    """
+    Creates a cumulative chart based on monetary values in the population and highlights selected samples.
+
+    Args:
+        population (pd.DataFrame): The full dataset containing the population.
+        value_column (str): The column in the DataFrame representing the monetary value to accumulate.
+        strata_column (Optional[str]): The column representing strata. If provided, stratified cumulative charts will be created.
+        output_path (str): The path where the output chart image will be saved.
+        threshold (Optional[float]): If provided, filter the population by this threshold on the `value_column`.
+
+    Returns:
+        None. Saves the chart to the provided output path.
+    """
+    # Apply threshold to population if provided
+    if threshold is not None:
+        population_filtered = population[population[value_column] >= threshold].copy(
+        )
+    else:
+        population_filtered = population.copy()
+
+    # Check if the filtered population is empty
+    if population_filtered.empty:
+        logger.warning(
+            "The filtered population is empty after applying the threshold. No chart will be generated.")
+        return
+
+    # Create stratified charts or a single overall chart
+    if strata_column and strata_column in population_filtered.columns:
+        for stratum, group in population_filtered.groupby(strata_column):
+            # Check if the group is empty
+            if group.empty:
+                logger.warning(
+                    f"Stratum '{stratum}' is empty after applying the threshold. Skipping this stratum.")
+                continue
+
             plt.figure(figsize=(10, 6))
 
-            sorted_values = sorted(group[value_column])
-            cumulative_sums = np.cumsum(sorted_values)
+            sorted_values = group.sort_values(
+                by=value_column).reset_index(drop=True)
+            cumulative_sums = sorted_values[value_column].cumsum()
 
-            plt.plot(range(len(sorted_values)), cumulative_sums,
-                     label='Кумулятивна сума')
+            # Check if there are values to plot
+            if sorted_values.empty:
+                logger.warning(
+                    f"No values to plot for stratum '{stratum}'. Skipping this stratum.")
+                plt.close()
+                continue
 
-            sample_in_stratum = sample[sample[strata_column] == stratum]
-            sample_indices = [sorted_values.index(
-                val) for val in sample_in_stratum[value_column] if val in sorted_values]
-            plt.scatter(sample_indices, [
-                        cumulative_sums[i] for i in sample_indices], color='red', label='Вибрані елементи')
+            # Plot cumulative sums
+            plt.plot(range(len(sorted_values)),
+                     cumulative_sums, label='Cumulative Sum')
 
-            plt.xlabel(
-                'Елементи страти (відсортовані за грошовою величиною)')
-            plt.ylabel('Кумулятивна сума грошових значень')
-            plt.title(f'Кумулятивний графік для страти {stratum}')
+            # Highlight sample points (where is_sample == 1)
+            sample_indices = sorted_values[sorted_values['is_sample'] == 1].index
+
+            # Plot sample points if any
+            if len(sample_indices) > 0:
+                plt.scatter(
+                    sample_indices, cumulative_sums.iloc[sample_indices], color='red', label='Selected Items')
+            else:
+                logger.warning(
+                    f"No matching sample values found in stratum '{stratum}' for plotting.")
+
+            plt.xlabel('Elements in Stratum (sorted by monetary value)')
+            plt.ylabel('Cumulative Sum of Monetary Values')
+            plt.title(f'Cumulative Chart for Stratum {stratum}')
             plt.legend()
 
             stratum_output_path = f"{output_path}_stratum_{stratum}.png"
@@ -126,130 +156,138 @@ def create_cumulative_chart(population: pd.DataFrame, sample: pd.DataFrame, valu
             plt.close()
 
             logger.info(
-                f"Збережено кумулятивний графік для страти {stratum}: {stratum_output_path}")
+                f"Saved cumulative chart for stratum {stratum}: {stratum_output_path}")
     else:
         plt.figure(figsize=(10, 6))
 
-        sorted_values = sorted(population[value_column])
-        cumulative_sums = np.cumsum(sorted_values)
+        sorted_values = population_filtered.sort_values(
+            by=value_column).reset_index(drop=True)
+        cumulative_sums = sorted_values[value_column].cumsum()
 
-        plt.plot(range(len(sorted_values)), cumulative_sums,
-                 label='Кумулятивна сума')
+        # Check if there are values to plot
+        if sorted_values.empty:
+            logger.warning(
+                "No values to plot for the overall population. No chart will be generated.")
+            plt.close()
+            return
 
-        sample_indices = [sorted_values.index(
-            val) for val in sample[value_column] if val in sorted_values]
-        plt.scatter(sample_indices, [
-                    cumulative_sums[i] for i in sample_indices], color='red', label='Вибрані елементи')
+        # Plot cumulative sums
+        plt.plot(range(len(sorted_values)),
+                 cumulative_sums, label='Cumulative Sum')
 
-        plt.xlabel('Елементи (відсортовані за грошовою величиною)')
-        plt.ylabel('Кумулятивна сума грошових значень')
-        plt.title('Кумулятивний графік методу грошової одиниці')
+        # Highlight sample points (where is_sample == 1)
+        sample_indices = sorted_values[sorted_values['is_sample'] == 1].index
+
+        # Plot sample points if any
+        if len(sample_indices) > 0:
+            plt.scatter(
+                sample_indices, cumulative_sums.iloc[sample_indices], color='red', label='Selected Items')
+        else:
+            logger.warning("No matching sample values found for plotting.")
+
+        plt.xlabel('Elements (sorted by monetary value)')
+        plt.ylabel('Cumulative Sum of Monetary Values')
+        plt.title('Cumulative Chart of Monetary Unit Sampling')
         plt.legend()
 
         plt.savefig(output_path)
         plt.close()
 
-        logger.info(f"Збережено загальний кумулятивний графік: {output_path}")
+        logger.info(f"Saved overall cumulative chart: {output_path}")
 
 
 def create_umap_projection(population: pd.DataFrame, label_column: str, features: List[str], output_path: str, cluster_column: Optional[str] = None):
+    """
+    Creates a UMAP projection to visualize high-dimensional data and labels (anomalies or clusters).
+
+    Args:
+        population (pd.DataFrame): The dataset containing the features and labels.
+        label_column (str): The column representing the labels (e.g., anomalies).
+        features (List[str]): The list of features to include in the UMAP projection.
+        output_path (str): The path where the UMAP plot will be saved.
+        cluster_column (Optional[str]): Optional column representing cluster assignments. If provided, clusters will be shown on the plot.
+
+    Returns:
+        None. Saves the UMAP projection chart to the provided output path.
+    """
     population = population.copy()
 
-    # Проверка на наличие столбца label_column
+    # Check if the label column is present
     if label_column not in population.columns:
         raise ValueError(f"Column '{label_column}' not found in the DataFrame")
 
-    # Флаг наличия колонки кластера
+    # Check for cluster column and ensure it is not in features
     has_cluster_column = cluster_column and cluster_column in population.columns
 
     if has_cluster_column:
-        # Убедимся, что колонка cluster не попала в features
         if cluster_column in features:
             raise ValueError(
                 f"Column '{cluster_column}' should not be in the features list")
-        # Удаляем строки с пропущенными значениями в метках и кластерах
         population = population.dropna(subset=[label_column, cluster_column])
     else:
-        # Удаляем строки с пропущенными значениями только в метках
         population = population.dropna(subset=[label_column])
 
-    print(
-        f"Label column: {label_column}, Cluster column: {cluster_column if has_cluster_column else 'None'}")
-
     available_features = get_available_features(population, features)
-    print(f"Available features: {available_features}")
-
     feature_data = population[available_features]
-    print(f"Feature data shape: {feature_data.shape}")
 
-    # Если нет признаков для построения UMAP
     if feature_data.empty:
         raise ValueError("No features available for UMAP projection")
 
-    # UMAP без использования random_seed
+    # Perform UMAP reduction
     reducer = umap.UMAP(n_components=2)
     embedding = reducer.fit_transform(feature_data)
-    print(f"UMAP embedding shape: {embedding.shape}")
 
-    # Извлекаем значения меток (label)
     labels = population[label_column].values
 
-    print(f"Labels shape: {labels.shape}")
-
-    # Создаем маски для label = 1 (черные точки) и label = 0 (обычные точки)
-    mask_anomalies = labels == 1  # label = 1 (черные точки)
-    mask_clusters = labels == 0   # label = 0 (обычные точки)
-
-    print(
-        f"Mask anomalies shape: {mask_anomalies.shape}, Mask clusters shape: {mask_clusters.shape}")
-    print(
-        f"Anomalies count: {mask_anomalies.sum()}, Clustered count: {mask_clusters.sum()}")
+    # Masks for anomalies (label = 1) and clusters (label = 0)
+    mask_anomalies = labels == 1
+    mask_clusters = labels == 0
 
     plt.figure(figsize=(10, 8))
 
-    # Если кластеры указаны и они есть в DataFrame, рисуем их
+    # Plot clusters if cluster column is available
     if has_cluster_column and mask_clusters.sum() > 0:
         clusters = population[cluster_column].values
-        print(f"Plotting clusters: {embedding[mask_clusters, 0].shape}")
         scatter = plt.scatter(
             embedding[mask_clusters, 0], embedding[mask_clusters, 1],
             c=clusters[mask_clusters], cmap='viridis', s=10, alpha=0.7, label='Clustered (label=0)')
-        # Добавляем цветовую легенду для кластеров
         plt.colorbar(scatter, label=cluster_column)
     else:
-        print(
-            f"Plotting without clusters: {embedding[mask_clusters, 0].shape}")
         plt.scatter(
             embedding[mask_clusters, 0], embedding[mask_clusters, 1],
             facecolor='blue', label='Clustered (label=0)',
             s=10, alpha=0.7)
 
-    # Затем рисуем точки с label = 1 (аномалии) поверх остальных
+    # Plot anomalies (label = 1)
     if mask_anomalies.sum() > 0:
-        print(f"Plotting anomalies: {embedding[mask_anomalies, 0].shape}")
         plt.scatter(
             embedding[mask_anomalies, 0], embedding[mask_anomalies, 1],
             facecolor='white', edgecolor='black', label='Anomalies (label=1)',
-            s=100, linewidth=1.5, alpha=1.0)
+            s=50, linewidth=1.5, alpha=1.0)
 
-    # Оформление графика
-    if has_cluster_column:
-        plt.title(
-            f'UMAP Projection (colored by {cluster_column}, anomalies in black)')
-    else:
-        plt.title(f'UMAP Projection (anomalies in black)')
+    plt.title(f'UMAP Projection (anomalies in black)' if not has_cluster_column else
+              f'UMAP Projection (colored by {cluster_column}, anomalies in white with black edge)')
 
     plt.xlabel('UMAP 1')
     plt.ylabel('UMAP 2')
 
-    # Сохраняем изображение
     plt.savefig(output_path)
     plt.close()
 
-    logger.info(f"UMAP график сохранен по пути: {output_path}")
+    logger.info(f"UMAP plot saved to: {output_path}")
 
 
 def plot_optimization_history(study, output_dir):
+    """
+    Plots the optimization history of an Optuna study.
+
+    Args:
+        study (optuna.Study): The Optuna study object containing the optimization results.
+        output_dir (str): Directory path to save the optimization history plot.
+
+    Returns:
+        None. Saves the optimization history plot to the provided output path.
+    """
     trials = study.trials
     values = [t.value for t in trials if t.value is not None]
 
@@ -263,6 +301,16 @@ def plot_optimization_history(study, output_dir):
 
 
 def plot_param_importances(study, output_dir):
+    """
+    Plots the parameter importances from an Optuna study.
+
+    Args:
+        study (optuna.Study): The Optuna study object containing the parameter importances.
+        output_dir (str): Directory path to save the parameter importance plot.
+
+    Returns:
+        None. Saves the parameter importance plot to the provided output path.
+    """
     importances = get_param_importances(study)
     params = list(importances.keys())
     values = list(importances.values())
@@ -276,6 +324,16 @@ def plot_param_importances(study, output_dir):
 
 
 def plot_parallel_coordinate(study, output_dir):
+    """
+    Plots the parallel coordinate plot for the Optuna study results.
+
+    Args:
+        study (optuna.Study): The Optuna study object containing the trial data.
+        output_dir (str): Directory path to save the parallel coordinate plot.
+
+    Returns:
+        None. Saves the parallel coordinate plot to the provided output path.
+    """
     trials = study.trials
     df = pd.DataFrame([{
         'trial': t.number,
@@ -290,6 +348,16 @@ def plot_parallel_coordinate(study, output_dir):
 
 
 def plot_slice(study, output_dir):
+    """
+    Plots the slice plot for each parameter in the Optuna study results.
+
+    Args:
+        study (optuna.Study): The Optuna study object containing the trial data.
+        output_dir (str): Directory path to save the slice plots.
+
+    Returns:
+        None. Saves the slice plots to the provided output path.
+    """
     trials = study.trials
     df = pd.DataFrame([{
         'trial': t.number,
@@ -308,6 +376,16 @@ def plot_slice(study, output_dir):
 
 
 def visualize_optuna_results(study, output_dir):
+    """
+    Generates and saves a set of visualization plots for an Optuna study.
+
+    Args:
+        study (optuna.Study): The Optuna study object containing the optimization results.
+        output_dir (str): Directory path where the plots will be saved.
+
+    Returns:
+        None. Saves all the generated plots to the provided output path.
+    """
     try:
         plot_optimization_history(study, output_dir)
         plot_param_importances(study, output_dir)
@@ -320,6 +398,16 @@ def visualize_optuna_results(study, output_dir):
 
 
 def get_available_features(population: pd.DataFrame, features: List[str]) -> List[str]:
+    """
+    Identifies and returns the available features from the given list in the DataFrame.
+
+    Args:
+        population (pd.DataFrame): The dataset containing the columns.
+        features (List[str]): List of features to check for availability in the DataFrame.
+
+    Returns:
+        List[str]: A list of available features found in the DataFrame.
+    """
     available_features = [f for f in features if f in population.columns]
     missing_features = set(features) - set(available_features)
     for feature in missing_features:

@@ -75,82 +75,99 @@ def autoencoder_sampling(data: pd.DataFrame, data_preprocessed: pd.DataFrame, sa
         sample (pd.DataFrame): Sampled data with "is_sample" == 1, size equals to sample_size.
         method_description (str): Description of the autoencoder architecture and details.
     """
-    # Set random seed for reproducibility
-    torch.manual_seed(random_seed)
-    np.random.seed(random_seed)
+    try:
+        # Set random seed for reproducibility
+        torch.manual_seed(random_seed)
+        np.random.seed(random_seed)
 
-    # Convert preprocessed data to PyTorch tensor
-    data_tensor = torch.tensor(data_preprocessed.values, dtype=torch.float32)
+        # Convert preprocessed data to PyTorch tensor
+        data_tensor = torch.tensor(
+            data_preprocessed.values, dtype=torch.float32)
 
-    # Create DataLoader for batch processing
-    dataset = TensorDataset(data_tensor)
-    dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
+        # Create DataLoader for batch processing
+        dataset = TensorDataset(data_tensor)
+        dataloader = DataLoader(dataset, batch_size=64, shuffle=True)
 
-    # Initialize autoencoder model
-    # Number of features after preprocessing
-    input_dim = data_preprocessed.shape[1]
-    autoencoder = FlexibleAutoencoder(input_dim=input_dim)
+        # Initialize autoencoder model
+        input_dim = data_preprocessed.shape[1]
+        autoencoder = FlexibleAutoencoder(input_dim=input_dim)
 
-    # Define optimizer and loss function
-    optimizer = torch.optim.Adam(autoencoder.parameters(), lr=1e-3)
-    # Can replace with nn.BCEWithLogitsLoss() if working with binary data
-    criterion = nn.MSELoss()
+        # Define optimizer and loss function
+        optimizer = torch.optim.Adam(autoencoder.parameters(), lr=1e-3)
+        criterion = nn.MSELoss()
 
-    # Training the autoencoder
-    num_epochs = 10  # More epochs for deeper model
-    logger.info(f"Training started with {num_epochs} epochs.")
+        # Training the autoencoder
+        num_epochs = 10  # More epochs for deeper model
+        logger.info(f"Training started with {num_epochs} epochs.")
 
-    for epoch in range(num_epochs):
-        total_loss = 0
-        for batch in dataloader:
-            batch_data = batch[0]  # Get batch data
+        for epoch in range(num_epochs):
+            total_loss = 0
+            for batch in dataloader:
+                batch_data = batch[0]  # Get batch data
 
-            # Forward pass
-            reconstructed = autoencoder(batch_data)
-            loss = criterion(reconstructed, batch_data)
+                # Forward pass
+                reconstructed = autoencoder(batch_data)
+                loss = criterion(reconstructed, batch_data)
 
-            # Backward pass and optimization
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
+                # Backward pass and optimization
+                optimizer.zero_grad()
+                loss.backward()
+                optimizer.step()
 
-            total_loss += loss.item()
-        logger.info(
-            f"Epoch [{epoch + 1}/{num_epochs}], Loss: {total_loss / len(dataloader):.6f}")
+                total_loss += loss.item()
+            logger.info(
+                f"Epoch [{epoch + 1}/{num_epochs}], Loss: {total_loss / len(dataloader):.6f}")
 
-    # Detecting anomalies (Reconstruction error as anomaly score)
-    autoencoder.eval()  # Set model to evaluation mode
-    with torch.no_grad():
-        reconstructed_data = autoencoder(data_tensor)
-        reconstruction_errors = torch.mean(
-            (reconstructed_data - data_tensor) ** 2, dim=1)
-        anomaly_scores = reconstruction_errors.numpy()
+        # Detecting anomalies (Reconstruction error as anomaly score)
+        autoencoder.eval()  # Set model to evaluation mode
+        with torch.no_grad():
+            reconstructed_data = autoencoder(data_tensor)
+            reconstruction_errors = torch.mean(
+                (reconstructed_data - data_tensor) ** 2, dim=1)
+            anomaly_scores = reconstruction_errors.numpy()
 
-    # Add anomaly scores to the original dataset
-    population_with_results = data.copy()
-    population_with_results['anomaly_score'] = anomaly_scores
+        # Add anomaly scores to the original dataset
+        population_with_results = data.copy()
+        population_with_results['anomaly_score'] = anomaly_scores
 
-    # Add anomaly scores to the preprocessed dataset (for charting)
-    population_for_chart = data_preprocessed.copy()
-    population_for_chart['anomaly_score'] = anomaly_scores
+        # Add anomaly scores to the preprocessed dataset (for charting)
+        population_for_chart = data_preprocessed.copy()
+        population_for_chart['anomaly_score'] = anomaly_scores
 
-    # Sort data by anomaly score and select top "sample_size" records as the sample
-    sample_indices = np.argsort(anomaly_scores)[-sample_size:]
-    population_with_results['is_sample'] = 0
-    population_with_results.loc[sample_indices, 'is_sample'] = 1
+        # Sort data by anomaly score and select top "sample_size" records as the sample
+        sample_indices = np.argsort(anomaly_scores)[-sample_size:]
+        population_with_results['is_sample'] = 0
+        population_with_results.loc[sample_indices, 'is_sample'] = 1
 
-    population_for_chart['is_sample'] = 0
-    population_for_chart.loc[sample_indices, 'is_sample'] = 1
+        population_for_chart['is_sample'] = 0
+        population_for_chart.loc[sample_indices, 'is_sample'] = 1
 
-    sample = population_for_chart[population_for_chart['is_sample'] == 1]
+        sample = population_with_results[population_with_results['is_sample'] == 1]
 
-    # Method description for logging
-    method_description = (
-        f"Autoencoder architecture: Flexible with 2 hidden layers (LeakyReLU activation), "
-        f"input_dim = {input_dim}, hidden_dim = 64, bottleneck_dim = 3.\n"
-        f"Trained on {len(data_preprocessed)} records with {len(features)} features.\n"
-        f"Sample size = {sample_size}, random_seed = {random_seed}.\n"
-        f"Detected {sample_size} most anomalous records."
-    )
+        # Total population size and number of records processed
+        total_population_size = len(data)
+        num_features = len(features)
 
-    return population_with_results, population_for_chart, sample, method_description
+        # Method description for logging
+        method_description = (
+            f"**SAMPLING**\n"
+            f"Autoencoder architecture: Flexible with 2 hidden layers (LeakyReLU activation), "
+            f"input_dim = {input_dim}, hidden_dim = 64, bottleneck_dim = 3.\n"
+            f"Trained on {total_population_size} records with {num_features} features.\n"
+            f"Sample size = {sample_size}, random_seed = {random_seed}.\n"
+            f"Detected top {sample_size} most anomalous records based on reconstruction error."
+        )
+
+        return population_with_results, population_for_chart, sample, method_description
+
+    except ValueError as ve:
+        logger.error(f"ValueError: {ve}")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"ValueError: {ve}"
+
+    except KeyError as ke:
+        logger.error(f"KeyError: {ke}")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"KeyError: {ke}"
+
+    except Exception as e:
+        logger.exception(f"Unexpected error in autoencoder_sampling: {e}")
+        return pd.DataFrame(), pd.DataFrame(), pd.DataFrame(), f"Unexpected error: {e}"
