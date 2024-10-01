@@ -1,0 +1,57 @@
+# Dataset with 200000 and 3 Categorical features and 3 Numerical features.
+
+import pandas as pd
+import numpy as np
+
+num_rows = 2000000
+
+category_1 = np.random.choice(['A', 'B', 'C'], size=num_rows)
+category_2 = np.random.choice(['X', 'Y', 'Z'], size=num_rows)
+category_3 = np.random.choice(['Low', 'Medium', 'High'], size=num_rows)
+
+numeric_1 = np.random.binomial(n=10, p=0.5, size=num_rows)
+
+numeric_2 = np.full(num_rows, 3)
+
+numeric_3 = np.ones(num_rows)
+
+df = pd.DataFrame({
+    'Category1': category_1,
+    'Category2': category_2,
+    'Category3': category_3,
+    'Numeric1': numeric_1,
+    'Numeric2': numeric_2,
+    'Numeric3': numeric_3
+})
+
+
+# Preprocessing 
+- 2 mln Dataset < 1 min
+
+# Isolation forest
+- 2 mln Dataset = 1 min
+
+# Local Outlier Factor
+- 2 mln Dataset > 20 min
+- 1 mln Dataset = 11 min
+- 500 thousand Dataset = 3 min
+
+# K-Means
+- 2 mln Dataset = 6 min
+- 1 mln Dataset = 6 min
+- 500 thousand Dataset = 6 min
+
+# Autoencoder
+- 2 mln Dataset = 9 min
+- 1 mln Dataset = 5 min
+- 500 thousand Dataset = 3
+
+# HDBSCAN
+- 2 mln Dataset > 20 min
+- 1 mln Dataset > 20 min
+- 500 thousand Dataset = 3 min 
+
+# Documentation 
+- 2 mln Dataset = 14 min
+- 1 mln Dataset = 7 min
+- 500 thousand Dataset = 4 min

@@ -13,18 +13,23 @@ from statistical_sampling.random import random_sampling
 from statistical_sampling.systematic import systematic_sampling
 from statistical_sampling.stratified import stratified_sampling
 from statistical_sampling.monetary_unit import monetary_unit_sampling
-from utils.visualization import create_strata_chart, create_cumulative_chart, create_umap_projection, visualize_optuna_results
+from utils.visualization import (
+    create_strata_chart,
+    create_cumulative_chart,
+    create_umap_projection,
+    visualize_optuna_results,
+)
 from utils.preprocessing import preprocess_data
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfgen import canvas
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import glob
 import threading
 
-logging.basicConfig(level=logging.DEBUG,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
 
@@ -41,17 +46,54 @@ class SamplingApp:
         self.use_threshold_var = tk.IntVar(value=0)
         self.use_stratify_var = tk.IntVar(value=0)
         self.preprocessing_method_description = ""
+        self.widgets = {}
 
         self.sampling_methods = {
-            1: {"name_ua": "Випадкова вибірка", "name_en": "Random Sampling", "description": "кожен елемент генеральної сукупності має рівну ймовірність потрапити у вибірку."},
-            2: {"name_ua": "Систематична вибірка", "name_en": "Systematic Sampling", "description": "елементи вибираються з генеральної сукупності через рівні інтервали."},
-            3: {"name_ua": "Стратифікована вибірка", "name_en": "Stratified Sampling", "description": "генеральна сукупність ділиться на страти (групи), і з кожної страти формується випадкова вибірка."},
-            4: {"name_ua": "Метод грошової одиниці", "name_en": "Monetary Unit Sampling", "description": "ймовірність вибору елемента пропорційна його грошовій величині. Використовується для оцінки сумарної величини помилок."},
-            5: {"name_ua": "Isolation Forest", "name_en": "Isolation Forest", "description": "алгоритм для виявлення аномалій на основі випадкових лісів."},
-            6: {"name_ua": "Local Outlier Factor", "name_en": "Local Outlier Factor", "description": "метод для виявлення локальних аномалій у даних."},
-            7: {"name_ua": "Кластеризація K-Means", "name_en": "K-Means Clustering", "description": "групування даних за схожістю для виявлення незвичайних точок."},
-            8: {"name_ua": "Автоенкодер", "name_en": "Autoencoder", "description": "зменшення розмірності даних для виявлення відхилень через аналіз помилки відновлення."},
-            9: {"name_ua": "HDBSCAN", "name_en": "HDBSCAN", "description": "знаходження аномалій, класифікуючи точки як шум, спираючись на їхню щільність і відстань до інших точок, що дозволяє виокремлювати викиди в даних."}
+            1: {
+                "name_ua": "Випадкова вибірка",
+                "name_en": "Random Sampling",
+                "description": "кожен елемент генеральної сукупності має рівну ймовірність потрапити у вибірку.",
+            },
+            2: {
+                "name_ua": "Систематична вибірка",
+                "name_en": "Systematic Sampling",
+                "description": "елементи вибираються з генеральної сукупності через рівні інтервали.",
+            },
+            3: {
+                "name_ua": "Стратифікована вибірка",
+                "name_en": "Stratified Sampling",
+                "description": "генеральна сукупність ділиться на страти (групи), і з кожної страти формується випадкова вибірка.",
+            },
+            4: {
+                "name_ua": "Метод грошової одиниці",
+                "name_en": "Monetary Unit Sampling",
+                "description": "ймовірність вибору елемента пропорційна його грошовій величині. Використовується для оцінки сумарної величини помилок.",
+            },
+            5: {
+                "name_ua": "Isolation Forest",
+                "name_en": "Isolation Forest",
+                "description": "алгоритм для виявлення аномалій на основі випадкових лісів.",
+            },
+            6: {
+                "name_ua": "Local Outlier Factor",
+                "name_en": "Local Outlier Factor",
+                "description": "метод для виявлення локальних аномалій у даних.",
+            },
+            7: {
+                "name_ua": "Кластеризація K-Means",
+                "name_en": "K-Means Clustering",
+                "description": "групування даних за схожістю для виявлення незвичайних точок.",
+            },
+            8: {
+                "name_ua": "Автоенкодер",
+                "name_en": "Autoencoder",
+                "description": "зменшення розмірності даних для виявлення відхилень через аналіз помилки відновлення.",
+            },
+            9: {
+                "name_ua": "HDBSCAN",
+                "name_en": "HDBSCAN",
+                "description": "знаходження аномалій, класифікуючи точки як шум, спираючись на їхню щільність і відстань до інших точок, що дозволяє виокремлювати викиди в даних.",
+            },
         }
 
         self.create_widgets()
@@ -60,10 +102,19 @@ class SamplingApp:
         style = ttk.Style()
         style.configure("TFrame", background="#f0f0f0")
         style.configure("TLabel", background="#f0f0f0", foreground="black")
-        style.configure("TButton", background="#cccccc", foreground="black",
-                        borderwidth=2, relief="solid", font=("Arial", 10))
-        style.map("TButton", background=[
-                  ('active', '#aaaaaa')], relief=[('pressed', 'sunken')])
+        style.configure(
+            "TButton",
+            background="#cccccc",
+            foreground="black",
+            borderwidth=2,
+            relief="solid",
+            font=("Arial", 10),
+        )
+        style.map(
+            "TButton",
+            background=[("active", "#aaaaaa")],
+            relief=[("pressed", "sunken")],
+        )
         style.configure("TCheckbutton", background="#f0f0f0",
                         foreground="black")
         style.configure("TCombobox", background="white", foreground="black")
@@ -74,7 +125,7 @@ class SamplingApp:
         choice_label = ttk.Label(
             self.choice_frame,
             text="Оберіть тип вибірки:",
-            font=("Arial", 12, "bold")
+            font=("Arial", 12, "bold"),
         )
         choice_label.grid(row=0, column=0, columnspan=2,
                           sticky="w", pady=(0, 5))
@@ -89,64 +140,91 @@ class SamplingApp:
                 bg="#f0f0f0",
                 font=("Arial", 8),
                 wraplength=600,
-                justify="left"
+                justify="left",
             )
             rb.grid(row=value, column=0, columnspan=2, sticky="w")
 
         self.options_frame = ttk.Frame(self.root, padding=(10, 10))
         self.options_frame.grid(row=1, column=0, sticky="w")
 
-        file_path_label = ttk.Label(
-            self.options_frame,
-            text="Файл з генеральною сукупністю:"
+        self.create_label(
+            self.options_frame, "Файл з генеральною сукупністю:", 0, 0
         )
-        file_path_label.grid(row=0, column=0, sticky="w")
-        self.browse_button = ttk.Button(
-            self.options_frame, text="Огляд", command=self.browse_file)
-        self.browse_button.grid(row=0, column=1, sticky="w")
-        self.file_path_entry = ttk.Entry(self.options_frame, width=50)
-        self.file_path_entry.grid(row=1, column=0, columnspan=2, sticky="w")
-
-        self.sample_size_label = ttk.Label(
-            self.options_frame, text="Розмір вибірки:")
-        self.sample_size_entry = ttk.Entry(self.options_frame)
-
-        self.strata_column_label = ttk.Label(
-            self.options_frame, text="Стовпець для стратифікації:")
-        self.strata_column_combobox = ttk.Combobox(self.options_frame)
-
-        self.value_column_label = ttk.Label(
-            self.options_frame, text="Стовпець зі значеннями грошових одиниць:")
-        self.value_column_combobox = ttk.Combobox(self.options_frame)
-
-        self.use_threshold_label = ttk.Label(
-            self.options_frame, text="Використовувати порогове значення?")
-        self.use_threshold_checkbutton = ttk.Checkbutton(
-            self.options_frame,
-            variable=self.use_threshold_var,
-            command=self.toggle_threshold_input
+        self.create_button_widget(
+            self.options_frame, "Огляд", self.browse_file, 0, 1)
+        self.widgets["file_path_entry"] = self.create_entry(
+            self.options_frame, 1, 0, colspan=2, width=50
         )
 
-        self.threshold_label = ttk.Label(
-            self.options_frame, text="Порогове значення:")
-        self.threshold_entry = ttk.Entry(self.options_frame)
+        # Define other widgets
+        self.widgets["sample_size"] = {
+            "label": self.create_label(
+                self.options_frame, "Розмір вибірки:", 2, 0
+            ),
+            "entry": self.create_entry(self.options_frame, 3, 0),
+        }
+        self.widgets["strata_column"] = {
+            "label": self.create_label(
+                self.options_frame, "Стовпець для стратифікації:", 4, 0
+            ),
+            "combobox": self.create_combobox(self.options_frame, 5, 0),
+        }
+        self.widgets["value_column"] = {
+            "label": self.create_label(
+                self.options_frame,
+                "Стовпець зі значеннями грошових одиниць:",
+                4,
+                0,
+            ),
+            "combobox": self.create_combobox(self.options_frame, 5, 0),
+        }
+        self.widgets["use_threshold"] = {
+            "label": self.create_label(
+                self.options_frame, "Використовувати порогове значення?", 6, 0
+            ),
+            "checkbutton": self.create_checkbutton(
+                self.options_frame,
+                self.use_threshold_var,
+                self.toggle_threshold_input,
+                6,
+                1,
+            ),
+        }
+        self.widgets["threshold"] = {
+            "label": self.create_label(
+                self.options_frame, "Порогове значення:", 7, 0
+            ),
+            "entry": self.create_entry(self.options_frame, 7, 1),
+        }
+        self.widgets["use_stratify"] = {
+            "label": self.create_label(
+                self.options_frame, "Використовувати стратифікацію?", 8, 0
+            ),
+            "checkbutton": self.create_checkbutton(
+                self.options_frame,
+                self.use_stratify_var,
+                self.toggle_stratify_input,
+                8,
+                1,
+            ),
+        }
+        self.widgets["mus_strata_column"] = {
+            "label": self.create_label(
+                self.options_frame, "Стовпець для стратифікації:", 9, 0
+            ),
+            "combobox": self.create_combobox(self.options_frame, 9, 1),
+        }
 
-        self.use_stratify_label = ttk.Label(
-            self.options_frame, text="Використовувати стратифікацію?")
-        self.use_stratify_checkbutton = ttk.Checkbutton(
+        self.widgets["column_types_button"] = self.create_button_widget(
             self.options_frame,
-            variable=self.use_stratify_var,
-            command=self.toggle_stratify_input
+            "Вказати типи колонок",
+            self.define_column_types,
+            10,
+            0,
         )
-
-        self.mus_strata_column_label = ttk.Label(
-            self.options_frame, text="Стовпець для стратифікації:")
-        self.mus_strata_column_combobox = ttk.Combobox(self.options_frame)
-
-        self.column_types_button = ttk.Button(
-            self.options_frame, text="Вказати типи колонок", command=self.define_column_types)
-        self.preprocess_label = ttk.Label(
-            self.options_frame, text="Передобробка даних виконана.", foreground='green')
+        self.widgets["preprocess_label"] = ttk.Label(
+            self.options_frame, text="Передобробка даних виконана.", foreground="green"
+        )
 
         self.ai_parameters_frame = ttk.Frame(self.root, padding=(10, 10))
 
@@ -157,118 +235,140 @@ class SamplingApp:
             self.result_frame, text="", justify=tk.LEFT)
         self.result_label.grid(row=0, column=0, sticky="w")
 
-        self.create_button = ttk.Button(
-            self.root, text="Створити вибірку", command=self.create_sample)
-        self.create_button.grid(row=3, column=1, sticky="se", padx=10, pady=10)
+        # Assign the button widget to self.create_button
+        self.create_button = self.create_button_widget(
+            self.root,
+            "Створити вибірку",
+            self.create_sample,
+            3,
+            1,
+            sticky="se",
+            padx=10,
+            pady=10,
+        )
 
-        # Добавляем метку состояния
-        self.status_label = ttk.Label(
-            self.root, text="", foreground='blue')
+        self.status_label = ttk.Label(self.root, text="", foreground="blue")
         self.status_label.grid(row=3, column=0, sticky="w", padx=10)
 
         self.on_choice_change()
 
+    def create_label(self, parent, text, row, column, **kwargs):
+        label = ttk.Label(parent, text=text)
+        label.grid(row=row, column=column, sticky="w", **kwargs)
+        return label
+
+    def create_entry(self, parent, row, column, colspan=1, **kwargs):
+        entry = ttk.Entry(parent, **kwargs)
+        entry.grid(row=row, column=column, columnspan=colspan, sticky="w")
+        return entry
+
+    def create_button_widget(self, parent, text, command, row, column, **kwargs):
+        button = ttk.Button(parent, text=text, command=command)
+        button.grid(row=row, column=column, **kwargs)
+        return button
+
+    def create_combobox(self, parent, row, column, **kwargs):
+        combobox = ttk.Combobox(parent)
+        combobox.grid(row=row, column=column, sticky="w", **kwargs)
+        return combobox
+
+    def create_checkbutton(self, parent, variable, command, row, column, **kwargs):
+        checkbutton = ttk.Checkbutton(
+            parent, variable=variable, command=command
+        )
+        checkbutton.grid(row=row, column=column, sticky="w", **kwargs)
+        return checkbutton
+
+    def toggle_widget_group(self, group_name, show=True):
+        widgets = self.widgets.get(group_name, {})
+        for widget in widgets.values():
+            if show:
+                widget.grid()
+            else:
+                widget.grid_remove()
+
     def toggle_threshold_input(self):
-        if self.use_threshold_var.get():
-            self.threshold_label.grid(row=7, column=0, sticky="w")
-            self.threshold_entry.grid(row=7, column=1, sticky="w")
-        else:
-            self.threshold_label.grid_remove()
-            self.threshold_entry.grid_remove()
+        self.toggle_widget_group(
+            "threshold", show=self.use_threshold_var.get())
 
     def toggle_stratify_input(self):
-        if self.use_stratify_var.get():
-            self.mus_strata_column_label.grid(row=9, column=0, sticky="w")
-            self.mus_strata_column_combobox.grid(row=9, column=1, sticky="w")
-        else:
-            self.mus_strata_column_label.grid_remove()
-            self.mus_strata_column_combobox.grid_remove()
+        self.toggle_widget_group(
+            "mus_strata_column", show=self.use_stratify_var.get())
 
     def define_column_types(self):
         if self.data is None:
             messagebox.showerror("Помилка", "Спочатку завантажте дані.")
             return
 
-        def select_numerical_columns():
-            numerical_columns = [
-                col for col in self.data.columns if pd.api.types.is_numeric_dtype(self.data[col])]
-            if not numerical_columns:
+        def select_columns(column_type):
+            columns = self.data.columns.tolist()
+            if column_type == "numerical":
+                columns = [
+                    col
+                    for col in self.data.columns
+                    if pd.api.types.is_numeric_dtype(self.data[col])
+                ]
+            elif column_type == "categorical":
+                columns = [
+                    col for col in self.data.columns if col not in self.numerical_columns
+                ]
+
+            if not columns:
                 messagebox.showerror(
-                    "Помилка", "У датафреймі немає числових колонок.")
+                    "Помилка", f"У датафреймі немає {column_type} колонок."
+                )
                 return
 
-            numerical_window = tk.Toplevel(self.root)
-            numerical_window.title("Вибір числових колонок")
-            tk.Label(numerical_window, text="Виберіть числові колонки:").pack(
-                anchor="w", padx=10, pady=5)
+            window = tk.Toplevel(self.root)
+            window.title(f"Вибір {column_type} колонок")
+            tk.Label(
+                window, text=f"Виберіть {column_type} колонки:"
+            ).pack(anchor="w", padx=10, pady=5)
 
-            numerical_listbox = tk.Listbox(
-                numerical_window, selectmode=tk.MULTIPLE, width=50)
-            for col in numerical_columns:
-                numerical_listbox.insert(tk.END, col)
-            numerical_listbox.pack(padx=10, pady=5)
+            listbox = tk.Listbox(window, selectmode=tk.MULTIPLE, width=50)
+            for col in columns:
+                listbox.insert(tk.END, col)
+            listbox.pack(padx=10, pady=5)
 
-            def save_numerical_columns():
-                selected_indices = numerical_listbox.curselection()
-                self.numerical_columns = [numerical_columns[i]
-                                          for i in selected_indices]
-                if not self.numerical_columns:
+            def save_columns():
+                selected_indices = listbox.curselection()
+                selected_columns = [columns[i] for i in selected_indices]
+                if column_type == "numerical":
+                    self.numerical_columns = selected_columns
+                elif column_type == "categorical":
+                    self.categorical_columns = selected_columns
+                if not selected_columns:
                     messagebox.showwarning(
-                        "Попередження", "Не обрано жодної числової колонки.")
-                    return
-                numerical_window.destroy()
-                select_categorical_columns()
+                        "Попередження", f"Не обрано жодної {column_type} колонки."
+                    )
+                window.destroy()
+                if column_type == "numerical":
+                    select_columns("categorical")
+                else:
+                    (
+                        self.data_preprocessed,
+                        self.preprocessing_method_description,
+                    ) = preprocess_data(
+                        self.data, self.numerical_columns, self.categorical_columns
+                    )
+                    self.widgets["preprocess_label"].grid(
+                        row=99, column=0, sticky="w"
+                    )
 
-            save_button = ttk.Button(
-                numerical_window, text="Далі", command=save_numerical_columns)
+            save_button = ttk.Button(window, text="Далі", command=save_columns)
             save_button.pack(pady=10)
 
-        def select_categorical_columns():
-            categorical_columns = [
-                col for col in self.data.columns if col not in self.numerical_columns]
-            if not categorical_columns:
-                messagebox.showinfo(
-                    "Інформація", "Усі колонки вибрано як числові. Категоріальних колонок немає.")
-                self.data_preprocessed, self.preprocessing_method_description = preprocess_data(
-                    self.data, self.numerical_columns, self.categorical_columns)
-                self.preprocess_label.grid(row=99, column=0, sticky="w")
-                return
-
-            categorical_window = tk.Toplevel(self.root)
-            categorical_window.title("Вибір категоріальних колонок")
-            tk.Label(categorical_window, text="Виберіть категоріальні колонки:").pack(
-                anchor="w", padx=10, pady=5)
-
-            categorical_listbox = tk.Listbox(
-                categorical_window, selectmode=tk.MULTIPLE, width=50)
-            for col in categorical_columns:
-                categorical_listbox.insert(tk.END, col)
-            categorical_listbox.pack(padx=10, pady=5)
-
-            def save_categorical_columns():
-                selected_indices = categorical_listbox.curselection()
-                self.categorical_columns = [
-                    categorical_columns[i] for i in selected_indices]
-                self.data_preprocessed, self.preprocessing_method_description = preprocess_data(
-                    self.data, self.numerical_columns, self.categorical_columns)
-                self.preprocess_label.grid(row=99, column=0, sticky="w")
-                categorical_window.destroy()
-
-            save_button = ttk.Button(
-                categorical_window, text="Зберегти", command=save_categorical_columns)
-            save_button.pack(pady=10)
-
-        select_numerical_columns()
+        select_columns("numerical")
 
     def browse_file(self):
         file_path = filedialog.askopenfilename(
             title="Виберіть файл з генеральною сукупністю",
-            filetypes=(("CSV files", "*.csv"), ("All files", "*.*"))
+            filetypes=(("CSV files", "*.csv"), ("All files", "*.*")),
         )
         if file_path:
             self.status_label.config(text="Завантаження файлу...")
-            self.file_path_entry.delete(0, tk.END)
-            self.file_path_entry.insert(0, file_path)
+            self.widgets["file_path_entry"].delete(0, tk.END)
+            self.widgets["file_path_entry"].insert(0, file_path)
             try:
                 self.data = pd.read_csv(file_path)
                 self.populate_column_dropdowns(self.data)
@@ -281,64 +381,54 @@ class SamplingApp:
     def populate_column_dropdowns(self, df):
         try:
             numerical_columns = [
-                col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])]
-            self.value_column_combobox['values'] = numerical_columns
-            self.strata_column_combobox['values'] = list(df.columns)
-            self.mus_strata_column_combobox['values'] = list(df.columns)
+                col for col in df.columns if pd.api.types.is_numeric_dtype(df[col])
+            ]
+            self.widgets["value_column"]["combobox"]["values"] = numerical_columns
+            columns = list(df.columns)
+            self.widgets["strata_column"]["combobox"]["values"] = columns
+            self.widgets["mus_strata_column"]["combobox"]["values"] = columns
         except Exception as e:
             self.result_label.config(
-                text=f"Помилка при заповненні списку колонок: {e}")
+                text=f"Помилка при заповненні списку колонок: {e}"
+            )
 
-    def toggle_options(self, choice):
-        for widget in [
-            self.sample_size_label,
-            self.sample_size_entry,
-            self.strata_column_label,
-            self.strata_column_combobox,
-            self.value_column_label,
-            self.value_column_combobox,
-            self.use_threshold_label,
-            self.use_threshold_checkbutton,
-            self.threshold_label,
-            self.threshold_entry,
-            self.use_stratify_label,
-            self.use_stratify_checkbutton,
-            self.mus_strata_column_label,
-            self.mus_strata_column_combobox,
+    def toggle_options(self):
+        choice = self.choice_var.get()
+        # Hide all widgets
+        for key in [
+            "sample_size",
+            "strata_column",
+            "value_column",
+            "use_threshold",
+            "threshold",
+            "use_stratify",
+            "mus_strata_column",
         ]:
-            widget.grid_remove()
+            self.toggle_widget_group(key, show=False)
 
+        # Show widgets based on choice
         if choice in self.sampling_methods:
-            self.sample_size_label.grid(row=2, column=0, sticky="w")
-            self.sample_size_entry.grid(row=3, column=0, sticky="w")
-
+            self.toggle_widget_group("sample_size", show=True)
         if choice == 3:
-            self.strata_column_label.grid(row=4, column=0, sticky="w")
-            self.strata_column_combobox.grid(row=5, column=0, sticky="w")
-
+            self.toggle_widget_group("strata_column", show=True)
         if choice == 4:
-            self.value_column_label.grid(row=4, column=0, sticky="w")
-            self.value_column_combobox.grid(row=5, column=0, sticky="w")
-            self.use_threshold_label.grid(row=6, column=0, sticky="w")
-            self.use_threshold_checkbutton.grid(
-                row=6, column=1, sticky="w")
+            self.toggle_widget_group("value_column", show=True)
+            self.toggle_widget_group("use_threshold", show=True)
             self.toggle_threshold_input()
-            self.use_stratify_label.grid(row=8, column=0, sticky="w")
-            self.use_stratify_checkbutton.grid(row=8, column=1, sticky="w")
+            self.toggle_widget_group("use_stratify", show=True)
             self.toggle_stratify_input()
 
-    def on_choice_change(self):
-        choice = self.choice_var.get()
-
-        self.toggle_options(choice)
-
         if choice in (5, 6, 7, 8, 9):
-            self.column_types_button.grid(row=10, column=0, sticky="w")
+            self.widgets["column_types_button"].grid(
+                row=10, column=0, sticky="w")
             self.ai_parameters_frame.grid(row=11, column=0, sticky="w")
         else:
-            self.column_types_button.grid_remove()
+            self.widgets["column_types_button"].grid_remove()
             self.ai_parameters_frame.grid_remove()
-            self.preprocess_label.grid_remove()
+            self.widgets["preprocess_label"].grid_remove()
+
+    def on_choice_change(self):
+        self.toggle_options()
 
     def create_sample(self):
         self.create_button.config(state=tk.DISABLED)
@@ -346,226 +436,276 @@ class SamplingApp:
         threading.Thread(target=self._create_sample).start()
 
     def _create_sample(self):
-        sample = None
-
-        def on_finish():
-            self.create_button.config(state=tk.NORMAL)
-            self.status_label.config(text="")
-
         try:
             choice = self.choice_var.get()
-            file_path = self.file_path_entry.get()
-            sample_size = int(self.sample_size_entry.get())
-            if not file_path:
-                raise ValueError("Не обрано файл з генеральною сукупністю.")
+            file_path = self.widgets["file_path_entry"].get()
+            sample_size = int(self.widgets["sample_size"]["entry"].get())
+            self.validate_inputs(file_path, sample_size)
             population = pd.read_csv(file_path)
             self.data = population
-            logger.debug(
-                f"Завантажено популяцію розміром {len(population)}")
-
-            if sample_size <= 0 or sample_size > len(population):
-                raise ValueError("Некоректний розмір вибірки.")
-
-            random_seed = random.randint(1, 10000)
-            logger.debug(f"Використовується випадкове зерно: {random_seed}")
 
             method_info = self.sampling_methods.get(choice)
-            if not method_info:
-                raise ValueError("Невідомий тип вибірки.")
-
-            if choice == 1:
-                population_with_results, sample, sampling_method_description = random_sampling(
-                    population, sample_size, random_seed)
-            elif choice == 2:
-                population_with_results, sample, sampling_method_description = systematic_sampling(
-                    population, sample_size, random_seed)
-            elif choice == 3:
-                strata_column = self.strata_column_combobox.get()
-                if strata_column not in population.columns:
-                    raise ValueError(
-                        "Обрано неіснуючий стовпець для стратифікації.")
-                population_with_results, sample, sampling_method_description = stratified_sampling(
-                    population, sample_size, strata_column, random_seed)
-            elif choice == 4:
-                value_column = self.value_column_combobox.get()
-                if value_column not in population.columns:
-                    raise ValueError(
-                        "Обрано неіснуючий стовпець для методу грошової одиниці.")
-                if not pd.api.types.is_numeric_dtype(population[value_column]):
-                    raise ValueError(
-                        "Стовпець для методу грошової одиниці має бути числовим.")
-                threshold = float(self.threshold_entry.get()
-                                  ) if self.use_threshold_var.get() else None
-                if threshold is not None and threshold < 0:
-                    raise ValueError(
-                        "Порогове значення має бути невід'ємним.")
-                strata_column = self.mus_strata_column_combobox.get(
-                ) if self.use_stratify_var.get() else None
-                if strata_column is not None and strata_column not in population.columns:
-                    raise ValueError(
-                        "Обрано неіснуючий стовпець для стратифікації.")
-                logger.debug(
-                    f"Параметри методу грошової одиниці: value_column={value_column}, threshold={threshold}, strata_column={strata_column}")
-                population_with_results, sample, sampling_method_description = monetary_unit_sampling(
-                    population, sample_size, value_column, threshold, strata_column, random_seed)
-            elif choice in (5, 6, 7, 8, 9):
-                if not self.numerical_columns and not self.categorical_columns:
-                    raise ValueError(
-                        "Вкажіть типи колонок для передобробки даних.")
-                if not hasattr(self, 'data_preprocessed'):
-                    raise ValueError(
-                        "Передобробка даних не виконана. Натисніть 'Вказати типи колонок' та збережіть вибір.")
-                features = self.numerical_columns + self.categorical_columns
-                if choice == 5:
-                    population_with_results, population_for_chart, sample, sampling_method_description = isolation_forest_sampling(
-                        self.data, self.data_preprocessed, sample_size, features, random_seed)
-                elif choice == 6:
-                    population_with_results, population_for_chart, sample, sampling_method_description = lof_sampling(
-                        self.data, self.data_preprocessed, sample_size, features, random_seed)
-                elif choice == 7:
-                    population_with_results, population_for_chart, sample, sampling_method_description, best_study = kmeans_sampling(
-                        self.data, self.data_preprocessed, sample_size, features, random_seed)
-                elif choice == 8:
-                    population_with_results, population_for_chart, sample, sampling_method_description = autoencoder_sampling(
-                        self.data, self.data_preprocessed, sample_size, features, random_seed)
-                elif choice == 9:
-                    population_with_results, population_for_chart, sample, sampling_method_description, best_study = hdbscan_sampling(
-                        self.data, self.data_preprocessed, sample_size, features, random_seed)
-            else:
-                raise ValueError("Невідомий метод вибірки.")
-
-            if sample is None or sample.empty:
-                raise ValueError(
-                    f"Не вдалося сформувати вибірку або вибірка порожня. {sampling_method_description}")
-
-            file_name, file_ext = os.path.splitext(file_path)
-            sample_type = method_info['name_en'].lower().replace(' ', '_')
-            # Изменение расширения на .pdf
-            output_path = f"{file_name}_{sample_type}.pdf"
-
-            # Сохранение выборки и популяции в CSV (при необходимости)
-            sample_output_path = f"{file_name}_{sample_type}_sample.csv"
-            population_output_path = f"{file_name}_{sample_type}_population.csv"
-
-            population_with_results.to_csv(
-                population_output_path, index=False)
-            sample.to_csv(sample_output_path, index=False)
-
-            # Генерация графиков
-            chart_paths = []
-            threshold = threshold if 'threshold' in locals() else None
-            value_column = value_column if 'value_column' in locals() else None
-
-            if choice in (3, 4) and 'strata_column' in locals() and strata_column:
-                strata_chart_path = f"{file_name}_{sample_type}_strata_chart.png"
-                create_strata_chart(
-                    population_with_results,
-                    sample,
-                    strata_column,
-                    strata_chart_path,
-                    threshold=threshold,
-                    value_column=value_column
-                )
-                chart_paths.append(strata_chart_path)
-
-            if choice == 4:
-                base_cumulative_chart_path = f"{file_name}_{sample_type}_cumulative_chart"
-                create_cumulative_chart(
-                    population_with_results,
-                    value_column,
-                    strata_column if self.use_stratify_var.get() else None,
-                    base_cumulative_chart_path,
-                    threshold=threshold
-                )
-                pattern = f"{file_name}_{sample_type}_cumulative_chart*.png"
-                cumulative_chart_files = glob.glob(pattern)
-                chart_paths.extend(cumulative_chart_files)
+            sampling_function = self.get_sampling_function(choice)
+            kwargs = self.get_sampling_parameters(choice)
 
             if choice in (5, 6, 7, 8, 9):
-                umap_projection_path = f"{file_name}_{sample_type}_umap_projection.png"
-                create_umap_projection(
-                    population_for_chart,
-                    'is_sample',
-                    features,
-                    umap_projection_path,
-                    'cluster'
+                # Extract parameters specific to AI methods
+                features = kwargs.pop('features')
+                random_seed = kwargs.pop('random_seed')
+                # Call the sampling function with the correct parameters
+                result = sampling_function(
+                    self.data, self.data_preprocessed, sample_size, features, random_seed
                 )
-                chart_paths.append(umap_projection_path)
+            else:
+                result = sampling_function(population, sample_size, **kwargs)
 
-            if choice in (7, 9):
-                base_optuna_results_path = f"{file_name}_{sample_type}_optuna_results"
-                visualize_optuna_results(
-                    best_study, base_optuna_results_path)
+            self.process_sampling_result(
+                result, method_info, file_path, choice)
+        except Exception as e:
+            self.handle_exception(e)
+        finally:
+            self.finalize_sample_creation()
+
+    def validate_inputs(self, file_path, sample_size):
+        if not file_path:
+            raise ValueError("Не обрано файл з генеральною сукупністю.")
+        if sample_size <= 0 or sample_size > len(pd.read_csv(file_path)):
+            raise ValueError("Некоректний розмір вибірки.")
+
+    def get_sampling_function(self, choice):
+        sampling_functions = {
+            1: random_sampling,
+            2: systematic_sampling,
+            3: stratified_sampling,
+            4: monetary_unit_sampling,
+            5: isolation_forest_sampling,
+            6: lof_sampling,
+            7: kmeans_sampling,
+            8: autoencoder_sampling,
+            9: hdbscan_sampling,
+        }
+        return sampling_functions.get(choice)
+
+    def get_sampling_parameters(self, choice):
+        params = {}
+        params["random_seed"] = random.randint(1, 10000)
+        if choice == 3:
+            params["strata_column"] = self.widgets["strata_column"][
+                "combobox"
+            ].get()
+        elif choice == 4:
+            params["value_column"] = self.widgets["value_column"][
+                "combobox"
+            ].get()
+            params["threshold"] = (
+                float(self.widgets["threshold"]["entry"].get())
+                if self.use_threshold_var.get()
+                else None
+            )
+            params["strata_column"] = (
+                self.widgets["mus_strata_column"]["combobox"].get()
+                if self.use_stratify_var.get()
+                else None
+            )
+        elif choice in (5, 6, 7, 8, 9):
+            if not self.numerical_columns and not self.categorical_columns:
+                raise ValueError(
+                    "Вкажіть типи колонок для передобробки даних."
+                )
+            if not hasattr(self, "data_preprocessed"):
+                raise ValueError(
+                    "Передобробка даних не виконана. Натисніть 'Вказати типи колонок' та збережіть вибір."
+                )
+            params["data_preprocessed"] = self.data_preprocessed
+            params["features"] = self.numerical_columns + \
+                self.categorical_columns
+        return params
+
+    def process_sampling_result(
+        self, result, method_info, file_path, choice
+    ):
+        # Unpack result based on sampling method
+        if choice in (1, 2, 3, 4):
+            population_with_results, sample, sampling_method_description = result
+        elif choice in (5, 6, 7, 8, 9):
+            (
+                population_with_results,
+                population_for_chart,
+                sample,
+                sampling_method_description,
+            ) = result[:4]
+            best_study = result[4] if len(result) > 4 else None
+
+        if sample is None or sample.empty:
+            raise ValueError(
+                f"Не вдалося сформувати вибірку або вибірка порожня. {sampling_method_description}"
+            )
+
+        file_name, file_ext = os.path.splitext(file_path)
+        sample_type = method_info["name_en"].lower().replace(" ", "_")
+        output_path = f"{file_name}_{sample_type}.pdf"
+
+        sample_output_path = f"{file_name}_{sample_type}_sample.csv"
+        population_output_path = f"{file_name}_{sample_type}_population.csv"
+
+        population_with_results.to_csv(population_output_path, index=False)
+        sample.to_csv(sample_output_path, index=False)
+
+        chart_paths = []
+        threshold = (
+            float(self.widgets["threshold"]["entry"].get())
+            if self.use_threshold_var.get()
+            else None
+        )
+        value_column = (
+            self.widgets["value_column"]["combobox"].get()
+            if "value_column" in self.widgets
+            else None
+        )
+        strata_column = (
+            self.widgets["strata_column"]["combobox"].get()
+            if "strata_column" in self.widgets
+            else None
+        )
+
+        if choice in (3, 4) and strata_column:
+            strata_chart_path = f"{file_name}_{sample_type}_strata_chart.png"
+            create_strata_chart(
+                population_with_results,
+                sample,
+                strata_column,
+                strata_chart_path,
+                threshold=threshold,
+                value_column=value_column,
+            )
+            chart_paths.append(strata_chart_path)
+
+        if choice == 4:
+            base_cumulative_chart_path = (
+                f"{file_name}_{sample_type}_cumulative_chart"
+            )
+            create_cumulative_chart(
+                population_with_results,
+                value_column,
+                strata_column if self.use_stratify_var.get() else None,
+                base_cumulative_chart_path,
+                threshold=threshold,
+            )
+            pattern = f"{file_name}_{sample_type}_cumulative_chart*.png"
+            cumulative_chart_files = glob.glob(pattern)
+            chart_paths.extend(cumulative_chart_files)
+
+        if choice in (5, 6, 7, 8, 9):
+            umap_projection_path = (
+                f"{file_name}_{sample_type}_umap_projection.png"
+            )
+
+            columns_to_drop = ['is_sample']
+            if 'cluster' in population_for_chart.columns:
+                columns_to_drop.append('cluster')
+            columns_without_sample_and_cluster = population_for_chart.columns.drop(
+                columns_to_drop)
+
+            create_umap_projection(
+                population_for_chart,
+                "is_sample",
+                columns_without_sample_and_cluster,
+                umap_projection_path,
+                cluster_column='cluster' if 'cluster' in population_for_chart.columns else None
+            )
+            chart_paths.append(umap_projection_path)
+
+            if choice in (7, 9) and best_study:
+                base_optuna_results_path = (
+                    f"{file_name}_{sample_type}_optuna_results"
+                )
+                visualize_optuna_results(best_study, base_optuna_results_path)
                 pattern = f"{file_name}_{sample_type}_optuna_results*.png"
                 optuna_result_files = glob.glob(pattern)
                 chart_paths.extend(optuna_result_files)
 
-            # Создание PDF
-            doc = SimpleDocTemplate(output_path, pagesize=A4)
-            styles = getSampleStyleSheet()
-            flowables = []
+        self.generate_pdf(
+            output_path, sampling_method_description, chart_paths)
 
-            # Функция для преобразования текста с \n в <br/>
-            def convert_newlines(text):
-                return text.replace('\n', '<br/>')
+        self.root.after(
+            0,
+            lambda: self.result_label.config(
+                text=f"The sample is saved to the file: {output_path}\n"
+            ),
+        )
 
-            # Пользовательский стиль для параграфов с разрывами строк
-            custom_style = ParagraphStyle(
-                'Custom',
-                parent=styles['Normal'],
-                spaceAfter=12,
-                leading=15
+    def generate_pdf(self, output_path, sampling_method_description, chart_paths):
+        doc = SimpleDocTemplate(output_path, pagesize=A4)
+        styles = getSampleStyleSheet()
+        flowables = []
+
+        def convert_newlines(text):
+            return text.replace("\n", "<br/>")
+
+        custom_style = ParagraphStyle(
+            "Custom", parent=styles["Normal"], spaceAfter=12, leading=15
+        )
+
+        if self.preprocessing_method_description:
+            flowables.append(
+                Paragraph(
+                    "Description of data preprocessing methods:",
+                    styles["Heading2"],
+                )
             )
+            formatted_preprocess_desc = convert_newlines(
+                self.preprocessing_method_description
+            )
+            flowables.append(
+                Paragraph(formatted_preprocess_desc, custom_style)
+            )
+            flowables.append(Spacer(1, 12))
 
-            # Добавление описаний методов
-            if choice in (5, 6, 7, 8, 9) and self.preprocessing_method_description:
+        if sampling_method_description:
+            flowables.append(
+                Paragraph(
+                    "Description of the sampling method:", styles["Heading2"]
+                )
+            )
+            formatted_sampling_desc = convert_newlines(
+                sampling_method_description
+            )
+            flowables.append(
+                Paragraph(formatted_sampling_desc, custom_style)
+            )
+            flowables.append(Spacer(1, 12))
+
+        for chart_path in chart_paths:
+            if os.path.exists(chart_path):
                 flowables.append(
-                    Paragraph("Description of data preprocessing methods:", styles['Heading2']))
-                formatted_preprocess_desc = convert_newlines(
-                    self.preprocessing_method_description)
+                    Paragraph(
+                        f"Chart: {os.path.basename(chart_path)}",
+                        styles["Heading3"],
+                    )
+                )
+                img = Image(chart_path, width=6 * inch, height=4 * inch)
+                flowables.append(img)
+                flowables.append(Spacer(1, 12))
+            else:
                 flowables.append(
-                    Paragraph(formatted_preprocess_desc, custom_style))
+                    Paragraph(
+                        f"Chart {os.path.basename(chart_path)} not found.",
+                        styles["Normal"],
+                    )
+                )
                 flowables.append(Spacer(1, 12))
 
-            if sampling_method_description:
-                flowables.append(
-                    Paragraph("Description of the sampling method:", styles['Heading2']))
-                formatted_sampling_desc = convert_newlines(
-                    sampling_method_description)
-                flowables.append(
-                    Paragraph(formatted_sampling_desc, custom_style))
-                flowables.append(Spacer(1, 12))
+        doc.build(flowables)
 
-            # Добавление графиков
-            for chart_path in chart_paths:
-                if os.path.exists(chart_path):
-                    flowables.append(
-                        Paragraph(f"Chart: {os.path.basename(chart_path)}", styles['Heading3']))
-                    img = Image(chart_path, width=6*inch, height=4*inch)
-                    flowables.append(img)
-                    flowables.append(Spacer(1, 12))
-                else:
-                    flowables.append(Paragraph(
-                        f"Chart {os.path.basename(chart_path)} not found.", styles['Normal']))
-                    flowables.append(Spacer(1, 12))
+    def handle_exception(self, exception):
+        logger.exception("Error occurred")
+        self.root.after(
+            0, lambda: messagebox.showerror("Помилка", str(exception))
+        )
 
-            # Сохранение PDF
-            doc.build(flowables)
-
-            # Обновление интерфейса после успешного выполнения
-            self.root.after(0, lambda: self.result_label.config(
-                text=f"The sample is saved to the file: {output_path}\n"))
-
-        except ValueError as e:
-            self.root.after(
-                0, lambda e=e: messagebox.showerror("Помилка", str(e)))
-        except Exception as e:
-            logger.exception("Несподівана помилка")
-            self.root.after(
-                0, lambda e=e: messagebox.showerror(
-                    "Помилка", f"Сталася несподівана помилка: {e}"))
-        finally:
-            self.root.after(0, on_finish)
+    def finalize_sample_creation(self):
+        self.root.after(0, lambda: self.create_button.config(state=tk.NORMAL))
+        self.root.after(0, lambda: self.status_label.config(text=""))
 
 
 def main():

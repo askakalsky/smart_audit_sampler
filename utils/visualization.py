@@ -215,7 +215,12 @@ def create_cumulative_chart(
         logger.info(f"Saved overall cumulative chart: {output_path}")
 
 
-def create_umap_projection(population: pd.DataFrame, label_column: str, features: List[str], output_path: str, cluster_column: Optional[str] = None):
+def create_umap_projection(
+        population: pd.DataFrame,
+        label_column: str,
+        features: List[str],
+        output_path: str,
+        cluster_column: Optional[str] = None):
     """
     Creates a UMAP projection to visualize high-dimensional data and labels (anomalies or clusters).
 
