@@ -19,39 +19,14 @@ def kmeans_sampling(
     population: pd.DataFrame,
     sample_size: int,
     features: List[str],
-    random_seed: int
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str]:
+    random_seed: int,
+    progress_callback=None  # Added progress_callback parameter
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
     """
     Performs sampling using K-Means clustering with Optuna-based hyperparameter optimization.
     The clustering quality is evaluated using dynamically selected metrics.
-
-    Parameters:
-    -----------
-    population_original : pd.DataFrame
-        Original dataset to apply clustering on.
-    population : pd.DataFrame
-        Preprocessed dataset with selected features for clustering.
-    sample_size : int
-        Number of samples to retrieve based on distance to cluster centroid.
-    features : List[str]
-        List of features used for clustering.
-    random_seed : int
-        Seed for random number generation.
-
-    Returns:
-    --------
-    Tuple containing:
-        - population_original : pd.DataFrame
-          Original dataset with clustering results.
-        - population : pd.DataFrame
-          Preprocessed dataset with clustering results.
-        - sample_processed : pd.DataFrame
-          Subset of the dataset containing the selected samples.
-        - method_description : str
-          Description of the sampling process and parameters used.
-        - study : optuna.Study
-          The Optuna study object that contains the results of hyperparameter optimization.
     """
+
     try:
         # Make copies to avoid modifying the original DataFrames
         population_original = population_original.copy()
@@ -78,10 +53,20 @@ def kmeans_sampling(
 
             return score
 
+        # Total number of trials for progress calculation
+        n_trials = 100
+
+        # Define Optuna callback to report progress
+        def optuna_callback(study, trial):
+            if progress_callback is not None:
+                progress = int((len(study.trials) / n_trials) * 100)
+                progress_callback(progress)
+
         # Run Optuna optimization with the defined objective
         study = optuna.create_study(
             direction='maximize', sampler=optuna.samplers.TPESampler(seed=random_seed))
-        study.optimize(objective, n_trials=100, show_progress_bar=True)
+        study.optimize(objective, n_trials=n_trials,
+                       callbacks=[optuna_callback])
 
         # Best parameters after optimization
         best_params = study.best_params
@@ -98,8 +83,10 @@ def kmeans_sampling(
             population, best_kmeans.cluster_centers_)
 
         # Add columns for cluster assignment and distance to centroid
-        population_original['distance_to_centroid'] = population['distance_to_centroid'] = distances
-        population_original['cluster'] = population['cluster'] = clusters
+        population_original['distance_to_centroid'] = distances
+        population_original['cluster'] = clusters
+        population['distance_to_centroid'] = distances
+        population['cluster'] = clusters
 
         # Optimized sampling using largest distances
         if sample_size < len(population_original):
@@ -112,9 +99,11 @@ def kmeans_sampling(
             sample_processed = population_original
 
         # Mark the samples in both original and processed populations
-        population_original['is_sample'] = population['is_sample'] = 0
+        population_original['is_sample'] = 0
+        population['is_sample'] = 0
         population_original.loc[sample_processed.index, 'is_sample'] = 1
         population.loc[sample_processed.index, 'is_sample'] = 1
+        sample_processed = sample_processed.copy()
         sample_processed['is_sample'] = 1
 
         # Total population size and number of clusters
@@ -133,6 +122,10 @@ def kmeans_sampling(
             f"Random seed: {random_seed}.\n"
             f"Number of trials: {len(study.trials)}.\n"
         )
+
+        # Report completion progress
+        if progress_callback is not None:
+            progress_callback(100)
 
         return population_original, population, sample_processed, method_description, study
 

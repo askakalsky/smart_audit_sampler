@@ -17,39 +17,14 @@ def hdbscan_sampling(
     population_original: pd.DataFrame,
     population: pd.DataFrame,
     sample_size: int,
-    features: List[str],  # Используется только для документации
-    random_seed: int
+    features: List[str],
+    random_seed: int,
+    progress_callback=None  # Added progress_callback parameter
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
     """
     Anomaly sampling using the HDBSCAN clustering algorithm with hyperparameter tuning via Optuna.
-
-    Parameters:
-    -----------
-    population_original : pd.DataFrame
-        The original dataset to be processed and annotated with cluster information.
-    population : pd.DataFrame
-        A copy of the original dataset used for clustering and anomaly detection.
-    sample_size : int
-        The desired number of anomalies to be sampled.
-    features : List[str]
-        List of features used for clustering (used for documentation purposes only).
-    random_seed : int
-        Seed for random number generation to ensure reproducibility.
-
-    Returns:
-    --------
-    Tuple containing:
-        - population_original : pd.DataFrame
-          The original dataset updated with cluster and sample annotations.
-        - population : pd.DataFrame
-          The processed dataset containing cluster and anomaly information.
-        - sample_processed : pd.DataFrame
-          Subset of the dataset containing the sampled anomalies.
-        - method_description : str
-          Description of the method used for sampling.
-        - study : optuna.Study
-          The Optuna study object with results of hyperparameter optimization.
     """
+
     try:
         # Make copies to avoid modifying the original DataFrames
         population_original = population_original.copy()
@@ -59,16 +34,6 @@ def hdbscan_sampling(
         rng = np.random.default_rng(random_seed)
 
         def choose_algorithm(n_samples: int, n_features: int) -> str:
-            """
-            Chooses the optimal algorithm for HDBSCAN based on data size and feature count.
-
-            Args:
-                n_samples (int): Number of samples in the dataset.
-                n_features (int): Number of features in the dataset.
-
-            Returns:
-                str: The name of the algorithm to use ('kdtree' or 'balltree').
-            """
             if n_features < 20 and n_samples < 10000:
                 return 'kdtree'
             else:
@@ -92,10 +57,21 @@ def hdbscan_sampling(
             clusterer = HDBSCAN(**params)
             return calculate_silhouette(clusterer, population)
 
+        # Total number of trials for progress calculation
+        n_trials = 100
+
+        # Define Optuna callback to report progress
+        def optuna_callback(study, trial):
+            if progress_callback is not None:
+                progress = int((len(study.trials) / n_trials) * 100)
+                progress_callback(progress)
+
         # Run Optuna optimization with random seed for reproducibility
         study = optuna.create_study(
             direction='maximize', sampler=optuna.samplers.TPESampler(seed=random_seed))
-        study.optimize(objective, n_trials=100, show_progress_bar=True)
+        study.optimize(objective, n_trials=n_trials,
+                       callbacks=[optuna_callback])
+
         best_params = study.best_params
         best_clusterer = HDBSCAN(**best_params)
         labels = best_clusterer.fit_predict(population)
@@ -112,7 +88,7 @@ def hdbscan_sampling(
         # Identify anomalies
         anomalies = population_original[population_original['is_anomaly'] == 1]
 
-        # Check if there are any anomalies, if not raise an error or warning
+        # Check if there are any anomalies
         if anomalies.empty:
             raise ValueError("У наборі даних не було виявлено аномалій.")
 
@@ -129,6 +105,7 @@ def hdbscan_sampling(
         # Mark the sampled data
         population_original.loc[sample_processed.index, 'is_sample'] = 1
         population.loc[sample_processed.index, 'is_sample'] = 1
+        sample_processed = sample_processed.copy()
         sample_processed['is_sample'] = 1
 
         # Total population size and the number of anomalies detected
@@ -148,6 +125,10 @@ def hdbscan_sampling(
             f"Random seed: {random_seed}.\n"
             f"Number of trials: {len(study.trials)}.\n"
         )
+
+        # Report completion progress
+        if progress_callback is not None:
+            progress_callback(100)
 
         return population_original, population, sample_processed, method_description, study
 

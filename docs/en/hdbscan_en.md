@@ -1,6 +1,6 @@
 # Script Description
 
-This script performs **anomaly-based sampling** using the **HDBSCAN** clustering algorithm with hyperparameter optimization via **Optuna**. The algorithm clusters the data, identifies anomalies, and returns a sample of anomalous records.**IMPORTANT** To ensure fast operation of all program modules, this algorithm is limited to use on datasets containing more than 500 000 records.
+This script performs **anomaly-based sampling** using the **HDBSCAN** clustering algorithm with hyperparameter optimization via **Optuna**. The algorithm clusters the data, identifies anomalies, and returns a sample of anomalous records.**IMPORTANT** To ensure fast operation of all program modules, this algorithm is limited to use on datasets containing more than 300 000 records.
 
 ## How HDBSCAN works:
 

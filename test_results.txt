@@ -1,9 +1,13 @@
-# Dataset with 200000 and 3 Categorical features and 3 Numerical features.
+# Dataset with num_rows and 3 Categorical features and 3 Numerical features.
 
 import pandas as pd
 import numpy as np
 
-num_rows = 2000000
+num_rows = 
+    # 2_000_000 
+    # 1_000_000 
+    # 500_000
+    # 300_000
 
 category_1 = np.random.choice(['A', 'B', 'C'], size=num_rows)
 category_2 = np.random.choice(['X', 'Y', 'Z'], size=num_rows)
@@ -49,9 +53,13 @@ df = pd.DataFrame({
 # HDBSCAN
 - 2 mln Dataset > 20 min
 - 1 mln Dataset > 20 min
-- 500 thousand Dataset = 3 min 
+- 500 thousand Dataset > 20 min
+- 300 thousand Dataset  = 17 min
 
-# Documentation 
+# UMAP Projection 
 - 2 mln Dataset = 14 min
 - 1 mln Dataset = 7 min
 - 500 thousand Dataset = 4 min
+
+# Documentation
+- 2 mln Dataset < 1 min
