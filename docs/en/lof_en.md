@@ -1,6 +1,6 @@
 # Script Description
 
-This script performs **anomaly-based sampling** using the **Local Outlier Factor (LOF)** method to detect outliers in a dataset. LOF identifies anomalies based on the local density of records by comparing each record with its neighbors.
+This script performs **anomaly-based sampling** using the **Local Outlier Factor (LOF)** method to detect outliers in a dataset. LOF identifies anomalies based on the local density of records by comparing each record with its neighbors.**IMPORTANT** To ensure fast operation of all program modules, this algorithm is limited to use on datasets containing more than 1 000 000 records.
 
 ## How Local Outlier Factor works:
 

@@ -440,9 +440,18 @@ class SamplingApp:
             choice = self.choice_var.get()
             file_path = self.widgets["file_path_entry"].get()
             sample_size = int(self.widgets["sample_size"]["entry"].get())
-            self.validate_inputs(file_path, sample_size)
             population = pd.read_csv(file_path)
             self.data = population
+
+            # Add dataset size limits for LOF and HDBSCAN
+            dataset_size = len(self.data)
+
+            if choice == 6 and dataset_size > 1_000_000:
+                raise ValueError(
+                    "LOF cannot be used for datasets larger than 1 million.")
+            elif choice == 9 and dataset_size > 500_000:
+                raise ValueError(
+                    "HDBSCAN cannot be used for datasets larger than 500 thousand.")
 
             method_info = self.sampling_methods.get(choice)
             sampling_function = self.get_sampling_function(choice)
@@ -452,7 +461,6 @@ class SamplingApp:
                 # Extract parameters specific to AI methods
                 features = kwargs.pop('features')
                 random_seed = kwargs.pop('random_seed')
-                # Call the sampling function with the correct parameters
                 result = sampling_function(
                     self.data, self.data_preprocessed, sample_size, features, random_seed
                 )
@@ -465,12 +473,6 @@ class SamplingApp:
             self.handle_exception(e)
         finally:
             self.finalize_sample_creation()
-
-    def validate_inputs(self, file_path, sample_size):
-        if not file_path:
-            raise ValueError("Не обрано файл з генеральною сукупністю.")
-        if sample_size <= 0 or sample_size > len(pd.read_csv(file_path)):
-            raise ValueError("Некоректний розмір вибірки.")
 
     def get_sampling_function(self, choice):
         sampling_functions = {
