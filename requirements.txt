@@ -1,0 +1,9 @@
+pandas
+PySide6
+scikit-learn
+torch
+umap-learn
+optuna
+reportlab
+matplotlib
+scipy
