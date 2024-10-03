@@ -2,6 +2,8 @@ import os
 import random
 import logging
 import pandas as pd
+import chardet
+import csv
 from PySide6 import QtCore, QtWidgets, QtGui
 from ml_sampling.isolation_forest import isolation_forest_sampling
 from ml_sampling.lof import lof_sampling
@@ -25,6 +27,11 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 import glob
 import time
+
+try:
+    from dbfread import DBF
+except ImportError:
+    DBF = None
 
 logging.basicConfig(
     level=logging.DEBUG, format="%(asctime)s - %(levelname)s - %(message)s"
@@ -431,14 +438,30 @@ class SamplingApp(QtWidgets.QMainWindow):
 
     def browse_file(self):
         file_dialog = QtWidgets.QFileDialog()
+        file_types = "All Files (*);;CSV Files (*.csv);;Excel Files (*.xls *.xlsx);;DBF Files (*.dbf);;JSON Files (*.json);;Parquet Files (*.parquet)"
         file_path, _ = file_dialog.getOpenFileName(
-            self, self.tr("Виберіть файл з генеральною сукупністю"), "", "CSV Files (*.csv);;All Files (*)")
+            self, self.tr("Виберіть файл з генеральною сукупністю"), "", file_types)
         if file_path:
             self.file_path.setText(file_path)
             self.status_label.setText(self.tr("Завантаження файлу..."))
             QtCore.QCoreApplication.processEvents()
             try:
-                self.data = pd.read_csv(file_path)
+                # Determine file type by extension
+                _, file_extension = os.path.splitext(file_path)
+                file_extension = file_extension.lower()
+                if file_extension in ['.csv']:
+                    self.data = self.read_csv_file(file_path)
+                elif file_extension in ['.xls', '.xlsx']:
+                    self.data = pd.read_excel(file_path)
+                elif file_extension in ['.dbf']:
+                    self.data = self.read_dbf_file(file_path)
+                elif file_extension == '.json':
+                    self.data = pd.read_json(file_path)
+                elif file_extension == '.parquet':
+                    self.data = pd.read_parquet(file_path)
+                else:
+                    # Try to read as CSV with auto-detection
+                    self.data = self.read_csv_file(file_path)
                 self.populate_column_dropdowns()
                 shape_text = f"{self.tr('Розмір файлу')}: {self.data.shape}"
                 self.file_shape_label.setText(shape_text)
@@ -448,21 +471,42 @@ class SamplingApp(QtWidgets.QMainWindow):
             finally:
                 self.status_label.setText("")
 
+    def read_csv_file(self, file_path):
+        # Detect encoding
+        with open(file_path, 'rb') as f:
+            result = chardet.detect(f.read(100000))  # Read first 100,000 bytes
+        encoding = result['encoding']
+        # Detect delimiter
+        with open(file_path, 'r', encoding=encoding, errors='ignore') as f:
+            sample = f.read(1024)
+            sniffer = csv.Sniffer()
+            try:
+                dialect = sniffer.sniff(sample)
+                delimiter = dialect.delimiter
+            except csv.Error:
+                delimiter = ','
+        # Read CSV with detected encoding and delimiter
+        df = pd.read_csv(file_path, encoding=encoding, delimiter=delimiter)
+        return df
+
+    def read_dbf_file(self, file_path):
+        if DBF is None:
+            QtWidgets.QMessageBox.critical(
+                self, self.tr("Помилка"), self.tr("Модуль 'dbfread' не встановлено. Будь ласка, встановіть його, щоб відкрити DBF файли."))
+            return pd.DataFrame()
+        # Detect encoding for DBF
+        with open(file_path, 'rb') as f:
+            result = chardet.detect(f.read(100000))
+        encoding = result['encoding']
+        # Read DBF file
+        table = DBF(file_path, encoding=encoding)
+        df = pd.DataFrame(iter(table))
+        return df
+
     def populate_column_dropdowns(self):
         try:
-            numerical_columns = []
-            for col in self.data.columns:
-                if pd.api.types.is_numeric_dtype(self.data[col]):
-                    numerical_columns.append(col)
-                else:
-                    # Спробуємо конвертувати до числового типу
-                    try:
-                        self.data[col] = pd.to_numeric(
-                            self.data[col], errors='coerce')
-                        if pd.api.types.is_numeric_dtype(self.data[col]):
-                            numerical_columns.append(col)
-                    except:
-                        pass
+            numerical_columns = [
+                col for col in self.data.columns if pd.api.types.is_numeric_dtype(self.data[col])]
             self.value_combo.clear()
             self.value_combo.addItems(numerical_columns)
             columns = list(self.data.columns)
@@ -596,7 +640,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         choice = self.method_button_group.checkedId()
         file_path = self.file_path.text()
         sample_size = int(self.sample_size_input.text())
-        population = pd.read_csv(file_path)
+        population = self.data.copy()
         self.data = population
 
         dataset_size = population.shape[0]
