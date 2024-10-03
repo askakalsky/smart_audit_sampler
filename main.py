@@ -450,8 +450,19 @@ class SamplingApp(QtWidgets.QMainWindow):
 
     def populate_column_dropdowns(self):
         try:
-            numerical_columns = [
-                col for col in self.data.columns if pd.api.types.is_numeric_dtype(self.data[col])]
+            numerical_columns = []
+            for col in self.data.columns:
+                if pd.api.types.is_numeric_dtype(self.data[col]):
+                    numerical_columns.append(col)
+                else:
+                    # Спробуємо конвертувати до числового типу
+                    try:
+                        self.data[col] = pd.to_numeric(
+                            self.data[col], errors='coerce')
+                        if pd.api.types.is_numeric_dtype(self.data[col]):
+                            numerical_columns.append(col)
+                    except:
+                        pass
             self.value_combo.clear()
             self.value_combo.addItems(numerical_columns)
             columns = list(self.data.columns)
