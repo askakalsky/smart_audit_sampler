@@ -52,7 +52,7 @@ def hdbscan_sampling(
                 'metric': 'euclidean',
                 'algorithm': chosen_algorithm,
                 'cluster_selection_method': 'eom',
-                'allow_single_cluster': False
+                'allow_single_cluster': True
             }
             clusterer = HDBSCAN(**params)
             return calculate_silhouette(clusterer, population)

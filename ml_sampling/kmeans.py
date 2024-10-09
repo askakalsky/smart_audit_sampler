@@ -20,20 +20,19 @@ def kmeans_sampling(
     sample_size: int,
     features: List[str],
     random_seed: int,
-    progress_callback=None  # Added progress_callback parameter
+    progress_callback=None
 ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, str, optuna.Study]:
     """
     Performs sampling using K-Means clustering with Optuna-based hyperparameter optimization.
-    The clustering quality is evaluated using dynamically selected metrics.
+    The clustering quality is evaluated using dynamically selected metrics. 
+    The selection of samples is based on relative distances to centroids within each cluster.
     """
-
     try:
         # Make copies to avoid modifying the original DataFrames
         population_original = population_original.copy()
         population = population.copy()
 
         def objective(trial):
-            # Define hyperparameters for K-Means
             params = {
                 'n_clusters': trial.suggest_int('n_clusters', 2, 20),
                 'init': 'k-means++',
@@ -53,52 +52,54 @@ def kmeans_sampling(
 
             return score
 
-        # Total number of trials for progress calculation
         n_trials = 100
 
-        # Define Optuna callback to report progress
         def optuna_callback(study, trial):
             if progress_callback is not None:
                 progress = int((len(study.trials) / n_trials) * 100)
                 progress_callback(progress)
 
-        # Run Optuna optimization with the defined objective
         study = optuna.create_study(
             direction='maximize', sampler=optuna.samplers.TPESampler(seed=random_seed))
         study.optimize(objective, n_trials=n_trials,
                        callbacks=[optuna_callback])
 
-        # Best parameters after optimization
         best_params = study.best_params
         best_kmeans = KMeans(random_state=random_seed, **best_params)
         best_kmeans.fit(population)
 
-        # Cluster predictions
         clusters = best_kmeans.predict(population)
-        if not np.issubdtype(clusters.dtype, np.integer):
-            clusters = clusters.astype(int)
-
-        # Distance to centroids
         _, distances = pairwise_distances_argmin_min(
             population, best_kmeans.cluster_centers_)
 
-        # Add columns for cluster assignment and distance to centroid
         population_original['distance_to_centroid'] = distances
         population_original['cluster'] = clusters
         population['distance_to_centroid'] = distances
         population['cluster'] = clusters
 
-        # Optimized sampling using largest distances
+        # Calculate relative distances within each cluster
+        population['relative_distance'] = 0.0
+        for cluster in np.unique(clusters):
+            cluster_distances = population.loc[population['cluster']
+                                               == cluster, 'distance_to_centroid']
+            std_dev = cluster_distances.std()
+            if std_dev > 0:
+                population.loc[population['cluster'] == cluster,
+                               'relative_distance'] = cluster_distances / std_dev
+            else:
+                population.loc[population['cluster'] ==
+                               cluster, 'relative_distance'] = 0.0
+
+        # Use the relative distances to select samples
         if sample_size < len(population_original):
-            largest_distances_indices = heapq.nlargest(
-                sample_size, range(len(distances)), distances.take)
-            sample_processed = population_original.iloc[largest_distances_indices]
+            largest_relative_distances_indices = heapq.nlargest(
+                sample_size, range(len(population)), population['relative_distance'].values.take)
+            sample_processed = population_original.iloc[largest_relative_distances_indices]
         else:
             logger.warning(
                 f"Requested sample size {sample_size} exceeds available data size {len(population_original)}. Using full data.")
             sample_processed = population_original
 
-        # Mark the samples in both original and processed populations
         population_original['is_sample'] = 0
         population['is_sample'] = 0
         population_original.loc[sample_processed.index, 'is_sample'] = 1
@@ -106,11 +107,9 @@ def kmeans_sampling(
         sample_processed = sample_processed.copy()
         sample_processed['is_sample'] = 1
 
-        # Total population size and number of clusters
         population_size = len(population_original)
         num_clusters = best_params['n_clusters']
 
-        # Method description
         method_description = (
             f"K-Means sampling with hyperparameter optimization using Optuna.\n"
             f"Sample size: {sample_size}.\n"
@@ -123,7 +122,6 @@ def kmeans_sampling(
             f"Number of trials: {len(study.trials)}.\n"
         )
 
-        # Report completion progress
         if progress_callback is not None:
             progress_callback(100)
 
