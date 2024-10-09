@@ -1,8 +1,6 @@
 import os
 import logging
 import pandas as pd
-import chardet
-import csv
 from PySide6 import QtCore
 from utils.preprocessing import preprocess_data
 from reportlab.lib.pagesizes import A4
@@ -248,22 +246,20 @@ class FileLoaderWorker(QtCore.QObject):
         Raises:
             Exception: If the file cannot be read with any of the common encodings and delimiters.
         """
-        # List of common encodings and delimiters
         encodings = ['utf-8', 'cp1251', 'cp1252', 'latin1']
         delimiters = [',', ';', '\t', '|']
 
         for encoding in encodings:
             for delimiter in delimiters:
                 try:
-                    df = pd.read_csv(
-                        file_path, encoding=encoding, delimiter=delimiter)
-                    # Check if DataFrame is not empty and has multiple columns
+                    chunk_iter = pd.read_csv(
+                        file_path, encoding=encoding, delimiter=delimiter, chunksize=100000
+                    )
+                    df = pd.concat(chunk_iter, ignore_index=True)
                     if not df.empty and len(df.columns) > 1:
                         return df
                 except Exception:
-                    continue  # Try next combination
-
-        # If none of the combinations worked, raise an exception
+                    continue
         raise Exception(
             "Failed to read CSV file with common encodings and delimiters.")
 
