@@ -71,10 +71,10 @@ pyenv local 3.10.11 2>&1 | tee -a %LOGFILE% || (
 echo Python 3.10.11 set as local version.
 echo Python 3.10.11 set as local version. >> %LOGFILE%
 
-:: Create virtual environment if it doesn't exist
+:: Check if the virtual environment exists
 if not exist .venv (
-    echo Creating virtual environment...
-    echo Creating virtual environment... >> %LOGFILE%
+    echo Creating virtual environment with Python 3.10.11...
+    echo Creating virtual environment with Python 3.10.11... >> %LOGFILE%
     python -m venv .venv 2>&1 | tee -a %LOGFILE% || (
         echo Failed to create virtual environment.
         echo Failed to create virtual environment. See %LOGFILE% for details. >> %LOGFILE%
@@ -84,11 +84,11 @@ if not exist .venv (
     echo Virtual environment created.
     echo Virtual environment created. >> %LOGFILE%
 ) else (
-    echo Virtual environment already exists.
-    echo Virtual environment already exists. >> %LOGFILE%
+    echo Virtual environment already exists. Using existing environment.
+    echo Virtual environment already exists. Using existing environment. >> %LOGFILE%
 )
 
-:: Activate virtual environment
+:: Activate the virtual environment
 echo Activating virtual environment...
 echo Activating virtual environment... >> %LOGFILE%
 call .venv\Scripts\activate 2>&1 | tee -a %LOGFILE% || (
@@ -100,11 +100,12 @@ call .venv\Scripts\activate 2>&1 | tee -a %LOGFILE% || (
 echo Virtual environment activated.
 echo Virtual environment activated. >> %LOGFILE%
 
-:: Install dependencies from requirements.txt
+:: Install dependencies from requirements.txt, even if already installed
 if exist requirements.txt (
-    echo Installing dependencies from requirements.txt...
-    echo Installing dependencies from requirements.txt... >> %LOGFILE%
-    pip install -r requirements.txt 2>&1 | tee -a %LOGFILE% || (
+    echo Checking and installing dependencies from requirements.txt...
+    echo Checking and installing dependencies from requirements.txt... >> %LOGFILE%
+    pip install --upgrade pip 2>&1 | tee -a %LOGFILE%
+    pip install -r requirements.txt --no-deps --upgrade --ignore-installed 2>&1 | tee -a %LOGFILE% || (
         echo Failed to install dependencies.
         echo Failed to install dependencies. See %LOGFILE% for details. >> %LOGFILE%
         pause
