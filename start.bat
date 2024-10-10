@@ -1,6 +1,9 @@
 @echo off
-REM git pull repository https://github.com/askakalsky/smart_audit_sampler 
-git pull
+:: Activate virtual environment
+call .venv\Scripts\activate
 
-REM start main.py
+:: Run the main project script
+echo Running the project...
 python main.py
+
+pause
