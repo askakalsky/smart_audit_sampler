@@ -20,12 +20,12 @@ set "PATH=%PATH%;%PYENV%;%USERPROFILE%\.pyenv\pyenv-win\shims"
 pyenv versions | findstr "3.10" >nul
 if %ERRORLEVEL% neq 0 (
     echo Python 3.10 not found. Installing Python 3.10...
-    pyenv install 3.10.0
+    pyenv install 3.10.11
 )
 
 :: Set Python 3.10 as the local version
 echo Setting Python 3.10 as the local version...
-pyenv local 3.10.0
+pyenv local 3.10.11
 
 :: Create virtual environment if it doesn't exist
 if not exist .venv (
