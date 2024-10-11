@@ -38,13 +38,14 @@ echo Updating environment variables...
 echo Updating environment variables... >> %LOGFILE%
 set "PYENV=%USERPROFILE%\.pyenv\pyenv-win\bin"
 set "PATH=%PYENV%;%USERPROFILE%\.pyenv\pyenv-win\shims;%PATH%"
+refreshenv 2>&1 | tee -a %LOGFILE%
 echo Environment variables updated for pyenv.
 echo Environment variables updated for pyenv. >> %LOGFILE%
 
 :: Check if Python 3.10.11 is installed
 echo Checking if Python 3.10.11 is installed...
 echo Checking if Python 3.10.11 is installed... >> %LOGFILE%
-pyenv versions | findstr "3.10.11" 2>&1 | tee -a %LOGFILE% || (
+pyenv versions --bare | findstr "^3.10.11$" 2>&1 | tee -a %LOGFILE% || (
     echo Python 3.10.11 not found. Installing Python 3.10.11...
     echo Python 3.10.11 not found. Installing Python 3.10.11... >> %LOGFILE%
     pyenv install 3.10.11 2>&1 | tee -a %LOGFILE% || (
@@ -91,7 +92,7 @@ if not exist .venv (
 :: Activate the virtual environment
 echo Activating virtual environment...
 echo Activating virtual environment... >> %LOGFILE%
-call .venv\Scripts\activate 2>&1 | tee -a %LOGFILE% || (
+call ".venv\Scripts\activate" 2>&1 | tee -a %LOGFILE% || (
     echo Failed to activate virtual environment.
     echo Failed to activate virtual environment. See %LOGFILE% for details. >> %LOGFILE%
     pause
@@ -105,7 +106,7 @@ if exist requirements.txt (
     echo Checking and installing dependencies from requirements.txt...
     echo Checking and installing dependencies from requirements.txt... >> %LOGFILE%
     pip install --upgrade pip 2>&1 | tee -a %LOGFILE%
-    pip install -r requirements.txt --no-deps --upgrade --ignore-installed 2>&1 | tee -a %LOGFILE% || (
+    pip install -r requirements.txt 2>&1 | tee -a %LOGFILE% || (
         echo Failed to install dependencies.
         echo Failed to install dependencies. See %LOGFILE% for details. >> %LOGFILE%
         pause
