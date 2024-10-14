@@ -1,0 +1,28 @@
+# Python cache and temporary files
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints
+
+# pip cache
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Virtual environment caches
+env/
+venv/
+ENV/
+.venv/
+ENV.bak/
+
+# VSCode settings
+.vscode/
+.vscode/settings.json
+.vscode/*
+
+# Log cache
+*.log
