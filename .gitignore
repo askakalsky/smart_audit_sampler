@@ -27,6 +27,7 @@ ENV.bak/
 # Кеш логов
 *.log
 setup_log.txt
+start_log.txt
 
 # Тестовые результаты
 test_results.txt
