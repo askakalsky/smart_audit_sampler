@@ -1,4 +1,4 @@
-# Python cache and temporary files
+# Python кеш и временные файлы
 __pycache__/
 *.py[cod]
 *.pyo
@@ -8,21 +8,24 @@ __pycache__/
 # Jupyter Notebook checkpoints
 .ipynb_checkpoints
 
-# pip cache
+# Кеш pip
 pip-log.txt
 pip-delete-this-directory.txt
 
-# Virtual environment caches
+# Кешы виртуальных окружений
 env/
 venv/
 ENV/
 .venv/
 ENV.bak/
 
-# VSCode settings
+# VSCode настройки
 .vscode/
 .vscode/settings.json
 .vscode/*
 
-# Log cache
+# Кеш логов
 *.log
+
+# Тестовые результаты
+test_results.txt
