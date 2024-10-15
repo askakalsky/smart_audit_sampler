@@ -13,7 +13,7 @@ echo ===== Update started at %date% %time% ===== >> %LOGFILE%
 
 :: Stash changes in specific files
 echo Stashing changes in specific files... >> %LOGFILE%
-git stash push start.bat setup.bat >> %LOGFILE% 2>&1
+git stash push start.bat setup.bat update.bat >> %LOGFILE% 2>&1
 if %errorlevel% neq 0 (
     echo Failed to stash changes. >> %LOGFILE%
     echo Failed to stash changes. Please check the stashing process. >> %LOGFILE%
