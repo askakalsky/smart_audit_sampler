@@ -425,15 +425,12 @@ class VisualizationWorker(QtCore.QObject):
         It handles the creation of visualizations and emits signals upon success or failure.
         """
         try:
-            # Execute the visualization function with provided arguments
+            # Execute the visualization function
             self.visualization_function(*self.args, **self.kwargs)
-            # Emit finished signal upon successful completion
-            self.finished.emit()
         except Exception as e:
             logger.exception(self.t('error_in_visualization_worker'))
             # Emit error signal with translated error message
-            self.error.emit(
-                f"{self.t('error_in_visualization_worker')}: {str(e)}")
+            self.error.emit(f"{self.t('error_in_visualization_worker')}: {str(e)}")
         finally:
             # Emit finished signal regardless of success or failure
             self.finished.emit()
@@ -510,8 +507,6 @@ class PdfGenerationWorker(QtCore.QObject):
         try:
             # Generate the PDF report
             self.generate_pdf()
-            # Emit finished signal upon successful completion
-            self.finished.emit()
         except Exception as e:
             logger.exception("Error occurred in PDF generation worker")
             # Emit error signal with the exception message

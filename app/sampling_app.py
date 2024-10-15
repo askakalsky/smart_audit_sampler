@@ -1007,20 +1007,19 @@ class SamplingApp(QtWidgets.QMainWindow):
                 self.visualization_worker = VisualizationWorker(
                     create_umap_projection, visualization_args, visualization_kwargs)
                 self.visualization_thread = QtCore.QThread()
-                self.visualization_worker.moveToThread(
-                    self.visualization_thread)
+                self.visualization_worker.moveToThread(self.visualization_thread)
                 self.visualization_thread.started.connect(
                     self.visualization_worker.run)
                 self.visualization_worker.finished.connect(
                     self.visualization_thread.quit)
-                self.visualization_worker.finished.connect(
-                    self.visualization_worker.deleteLater)
-                self.visualization_thread.finished.connect(
-                    self.visualization_thread.deleteLater)
                 self.visualization_worker.error.connect(
                     self.handle_visualization_error)
                 self.visualization_worker.finished.connect(lambda: self.finalize_process(
                     choice, method_info, output_path_en, sampling_method_description, chart_paths, file_name, sample_type, best_study))
+                self.visualization_thread.finished.connect(
+                    self.visualization_worker.deleteLater)
+                self.visualization_thread.finished.connect(
+                    self.visualization_thread.deleteLater)
                 self.visualization_thread.start()
                 return  # Exit the method to wait for visualization to finish
             else:
@@ -1096,12 +1095,10 @@ class SamplingApp(QtWidgets.QMainWindow):
         self.pdf_worker.moveToThread(self.pdf_thread)
         self.pdf_thread.started.connect(self.pdf_worker.run)
         self.pdf_worker.finished.connect(self.pdf_thread.quit)
-        self.pdf_worker.finished.connect(self.pdf_worker.deleteLater)
-        self.pdf_thread.finished.connect(self.pdf_thread.deleteLater)
-
-        # Connect signals to handle PDF generation completion or errors
         self.pdf_worker.error.connect(self.handle_pdf_error)
         self.pdf_worker.finished.connect(self.handle_pdf_finished)
+        self.pdf_thread.finished.connect(self.pdf_worker.deleteLater)
+        self.pdf_thread.finished.connect(self.pdf_thread.deleteLater)
         self.pdf_thread.start()
 
     @QtCore.Slot()
@@ -1135,26 +1132,11 @@ class SamplingApp(QtWidgets.QMainWindow):
         Args:
             event (QCloseEvent): The close event.
         """
-        if hasattr(self, 'thread') and self.thread.isRunning():
-            self.thread.quit()
-            self.thread.wait()  # Ждем завершения потока
-
-        if hasattr(self, 'visualization_thread') and self.visualization_thread.isRunning():
-            self.visualization_thread.quit()
-            self.visualization_thread.wait()
-
-        if hasattr(self, 'pdf_thread') and self.pdf_thread.isRunning():
-            self.pdf_thread.quit()
-            self.pdf_thread.wait()
-
-        if hasattr(self, 'file_loader_thread') and self.file_loader_thread.isRunning():
-            self.file_loader_thread.quit()
-            self.file_loader_thread.wait()
-
-        if hasattr(self, 'preprocessing_thread') and self.preprocessing_thread.isRunning():
-            self.preprocessing_thread.quit()
-            self.preprocessing_thread.wait()
-
+        for thread_attr in ['thread', 'visualization_thread', 'pdf_thread', 'file_loader_thread', 'preprocessing_thread']:
+            thread = getattr(self, thread_attr, None)
+            if thread and thread.isRunning():
+                thread.quit()
+                thread.wait()
         event.accept()
 
 
