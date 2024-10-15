@@ -1,5 +1,6 @@
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib
 import umap
 import logging
 import pandas as pd
@@ -7,6 +8,8 @@ import matplotlib.pyplot as plt
 import umap
 from optuna.importance import get_param_importances
 from typing import Optional, List
+
+matplotlib.use('Agg')
 
 logging.basicConfig(level=logging.DEBUG,
                     format='%(asctime)s - %(levelname)s - %(message)s')

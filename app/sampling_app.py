@@ -1135,16 +1135,26 @@ class SamplingApp(QtWidgets.QMainWindow):
         Args:
             event (QCloseEvent): The close event.
         """
-        # Wait for worker threads to finish before closing
         if hasattr(self, 'thread') and self.thread.isRunning():
             self.thread.quit()
-            self.thread.wait()
+            self.thread.wait()  # Ждем завершения потока
+
         if hasattr(self, 'visualization_thread') and self.visualization_thread.isRunning():
             self.visualization_thread.quit()
             self.visualization_thread.wait()
+
         if hasattr(self, 'pdf_thread') and self.pdf_thread.isRunning():
             self.pdf_thread.quit()
             self.pdf_thread.wait()
+
+        if hasattr(self, 'file_loader_thread') and self.file_loader_thread.isRunning():
+            self.file_loader_thread.quit()
+            self.file_loader_thread.wait()
+
+        if hasattr(self, 'preprocessing_thread') and self.preprocessing_thread.isRunning():
+            self.preprocessing_thread.quit()
+            self.preprocessing_thread.wait()
+
         event.accept()
 
 

@@ -434,7 +434,9 @@ class VisualizationWorker(QtCore.QObject):
             # Emit error signal with translated error message
             self.error.emit(
                 f"{self.t('error_in_visualization_worker')}: {str(e)}")
-
+        finally:
+            # Emit finished signal regardless of success or failure
+            self.finished.emit()
 
 class PdfGenerationWorker(QtCore.QObject):
     """
@@ -514,6 +516,9 @@ class PdfGenerationWorker(QtCore.QObject):
             logger.exception("Error occurred in PDF generation worker")
             # Emit error signal with the exception message
             self.error.emit(str(e))
+        finally:
+            # Always ensure the thread emits finished signal, even in case of errors
+            self.finished.emit()
 
     def generate_pdf(self):
         """
