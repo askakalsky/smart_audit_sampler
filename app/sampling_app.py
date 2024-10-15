@@ -47,6 +47,8 @@ class SamplingApp(QtWidgets.QMainWindow):
         and initializes the main UI components.
         """
         super().__init__()
+        self.threads = []
+        self.workers = []
         self.language = 'ua'  # 'ua' for Ukrainian, 'en' for English
 
         # Translation dictionaries for UI text
@@ -742,20 +744,23 @@ class SamplingApp(QtWidgets.QMainWindow):
         kwargs = self.get_sampling_parameters(choice)
 
         # Create a worker and thread for sampling to prevent UI blocking
-        self.worker = Worker(sampling_function, kwargs, choice,
-                             method_info, file_path)
-        self.thread = QtCore.QThread()
-        self.worker.moveToThread(self.thread)
-        self.thread.started.connect(self.worker.run)
-        self.worker.finished.connect(self.thread.quit)
-        self.worker.finished.connect(self.worker.deleteLater)
-        self.thread.finished.connect(self.thread.deleteLater)
+        worker = Worker(sampling_function, kwargs, choice, method_info, file_path)
+        thread = QtCore.QThread()
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
 
         # Connect signals to handle sampling results or errors
-        self.worker.error.connect(self.handle_worker_error)
-        self.worker.progress.connect(self.update_progress_bar)
-        self.worker.result_ready.connect(self.process_sampling_result)
-        self.thread.start()
+        worker.error.connect(self.handle_worker_error)
+        worker.progress.connect(self.update_progress_bar)
+        worker.result_ready.connect(self.process_sampling_result)
+        thread.start()
+
+        # Store links to the thread and worker
+        self.workers.append(worker)
+        self.threads.append(thread)
 
     def get_sampling_function(self, choice: int):
         """
@@ -1004,23 +1009,22 @@ class SamplingApp(QtWidgets.QMainWindow):
                     "output_path": f"{file_name}_{sample_type}_umap_projection.png",
                     "cluster_column": 'cluster' if 'cluster' in population_for_chart.columns else None
                 }
-                self.visualization_worker = VisualizationWorker(
+                visualization_worker = VisualizationWorker(
                     create_umap_projection, visualization_args, visualization_kwargs)
-                self.visualization_thread = QtCore.QThread()
-                self.visualization_worker.moveToThread(self.visualization_thread)
-                self.visualization_thread.started.connect(
-                    self.visualization_worker.run)
-                self.visualization_worker.finished.connect(
-                    self.visualization_thread.quit)
-                self.visualization_worker.error.connect(
-                    self.handle_visualization_error)
-                self.visualization_worker.finished.connect(lambda: self.finalize_process(
+                visualization_thread = QtCore.QThread()
+                visualization_worker.moveToThread(visualization_thread)
+                visualization_thread.started.connect(visualization_worker.run)
+                visualization_worker.finished.connect(visualization_thread.quit)
+                visualization_worker.error.connect(self.handle_visualization_error)
+                visualization_worker.finished.connect(lambda: self.finalize_process(
                     choice, method_info, output_path_en, sampling_method_description, chart_paths, file_name, sample_type, best_study))
-                self.visualization_thread.finished.connect(
-                    self.visualization_worker.deleteLater)
-                self.visualization_thread.finished.connect(
-                    self.visualization_thread.deleteLater)
-                self.visualization_thread.start()
+                visualization_thread.finished.connect(visualization_worker.deleteLater)
+                visualization_thread.finished.connect(visualization_thread.deleteLater)
+                visualization_thread.start()
+
+                # Store links to the thread and worker
+                self.workers.append(visualization_worker)
+                self.threads.append(visualization_thread)
                 return  # Exit the method to wait for visualization to finish
             else:
                 # Finalize the process for sampling methods that do not require visualization
@@ -1084,22 +1088,26 @@ class SamplingApp(QtWidgets.QMainWindow):
         self.status_label.setText(self.t('creating_sample'))
         self.create_button.setEnabled(False)
 
-        self.pdf_worker = PdfGenerationWorker(
+        pdf_worker = PdfGenerationWorker(
             output_path_en,
             sampling_method_description,
             self.preprocessing_method_description,
             chart_paths,
-            language='en'  # Assuming PDF is always in English; adjust if needed
+            language='en'
         )
-        self.pdf_thread = QtCore.QThread()
-        self.pdf_worker.moveToThread(self.pdf_thread)
-        self.pdf_thread.started.connect(self.pdf_worker.run)
-        self.pdf_worker.finished.connect(self.pdf_thread.quit)
-        self.pdf_worker.error.connect(self.handle_pdf_error)
-        self.pdf_worker.finished.connect(self.handle_pdf_finished)
-        self.pdf_thread.finished.connect(self.pdf_worker.deleteLater)
-        self.pdf_thread.finished.connect(self.pdf_thread.deleteLater)
-        self.pdf_thread.start()
+        pdf_thread = QtCore.QThread()
+        pdf_worker.moveToThread(pdf_thread)
+        pdf_thread.started.connect(pdf_worker.run)
+        pdf_worker.finished.connect(pdf_thread.quit)
+        pdf_worker.error.connect(self.handle_pdf_error)
+        pdf_worker.finished.connect(self.handle_pdf_finished)
+        pdf_thread.finished.connect(pdf_worker.deleteLater)
+        pdf_thread.finished.connect(pdf_thread.deleteLater)
+        pdf_thread.start()
+
+        # Store links to the thread and worker
+        self.workers.append(pdf_worker)
+        self.threads.append(pdf_thread)
 
     @QtCore.Slot()
     def handle_pdf_finished(self):
@@ -1132,9 +1140,8 @@ class SamplingApp(QtWidgets.QMainWindow):
         Args:
             event (QCloseEvent): The close event.
         """
-        for thread_attr in ['thread', 'visualization_thread', 'pdf_thread', 'file_loader_thread', 'preprocessing_thread']:
-            thread = getattr(self, thread_attr, None)
-            if thread and thread.isRunning():
+        for thread in self.threads:
+            if thread.isRunning():
                 thread.quit()
                 thread.wait()
         event.accept()
