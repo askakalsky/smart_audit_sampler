@@ -1,5 +1,14 @@
 @echo off
-set LOGFILE=setup_log.txt
+:: Set log directory and file
+set LOGDIR=logs
+set LOGFILE=%LOGDIR%\setup_log.txt
+
+:: Create logs directory if it doesn't exist
+if not exist "%LOGDIR%" (
+    mkdir "%LOGDIR%"
+)
+
+:: Log start time
 echo ===== Setup started at %date% %time% ===== >> %LOGFILE%
 
 :: Check if Python is installed
@@ -13,10 +22,10 @@ if %errorlevel% neq 0 (
 
 echo Python is installed. >> %LOGFILE%
 
-:: Create virtual environment if not exists
+:: Create virtual environment if it does not exist
 if not exist ".venv" (
-    echo Creating virtual environment...
-    python -m venv .venv
+    echo Creating virtual environment... >> %LOGFILE%
+    python -m venv .venv >> %LOGFILE% 2>&1
     if %errorlevel% neq 0 (
         echo Failed to create virtual environment. >> %LOGFILE%
         echo Failed to create virtual environment. Please ensure that Python is correctly installed and try again.
@@ -29,7 +38,7 @@ if not exist ".venv" (
 )
 
 :: Activate the virtual environment
-echo Activating virtual environment...
+echo Activating virtual environment... >> %LOGFILE%
 call .venv\Scripts\activate
 if %errorlevel% neq 0 (
     echo Failed to activate virtual environment. >> %LOGFILE%
@@ -39,9 +48,9 @@ if %errorlevel% neq 0 (
 )
 echo Virtual environment activated. >> %LOGFILE%
 
-:: Install dependencies
+:: Install dependencies if requirements.txt exists
 if exist requirements.txt (
-    echo Installing dependencies...
+    echo Installing dependencies... >> %LOGFILE%
     pip install --upgrade pip >> %LOGFILE% 2>&1
     pip install -r requirements.txt >> %LOGFILE% 2>&1
     if %errorlevel% neq 0 (
@@ -56,9 +65,10 @@ if exist requirements.txt (
 )
 
 :: Deactivate the virtual environment
-echo Deactivating virtual environment...
+echo Deactivating virtual environment... >> %LOGFILE%
 deactivate
 echo Virtual environment deactivated. >> %LOGFILE%
 
+:: Final success message
 echo Project executed successfully. >> %LOGFILE%
 pause

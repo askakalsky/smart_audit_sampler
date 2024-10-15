@@ -1,5 +1,14 @@
 @echo off
-set LOGFILE=update_log.txt
+:: Set log directory and file
+set LOGDIR=logs
+set LOGFILE=%LOGDIR%\update_log.txt
+
+:: Create logs directory if it doesn't exist
+if not exist "%LOGDIR%" (
+    mkdir "%LOGDIR%"
+)
+
+:: Log start time
 echo ===== Update started at %date% %time% ===== >> %LOGFILE%
 
 :: Stash changes in specific files

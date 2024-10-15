@@ -28,6 +28,8 @@ ENV.bak/
 *.log
 setup_log.txt
 start_log.txt
+update_log.txt
+logs/
 
 # Тестовые результаты
 test_results.txt
