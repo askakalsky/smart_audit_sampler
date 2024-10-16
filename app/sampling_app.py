@@ -50,6 +50,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         self.threads = []
         self.workers = []
         self.language = 'ua'  # 'ua' for Ukrainian, 'en' for English
+        self.pdf_worker = None
 
         # Translation dictionaries for UI text
         self.translations = {
@@ -479,6 +480,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         self.preprocess_label.setText(self.t('data_preprocessing_completed'))
         self.create_button.setText(self.t('create_sample'))
         self.status_label.setText("")
+        self.status_label.setVisible(False)
 
     def browse_file(self):
         """
@@ -706,7 +708,9 @@ class SamplingApp(QtWidgets.QMainWindow):
         """
         self.create_button.setEnabled(False)
         self.status_label.setText(self.t('creating_sample'))
+        self.status_label.setVisible(True)
         self.result_label.setText("")
+        self.result_label.setVisible(False)
         self.progress_bar.setValue(0)
         self.progress_bar.setVisible(True)
         QtCore.QCoreApplication.processEvents()
@@ -846,6 +850,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         shape_text = f"{self.t('file_size')}: {self.data.shape}"
         self.file_shape_label.setText(shape_text)
         self.status_label.setText("")
+        self.status_label.setVisible(False)
 
     @QtCore.Slot(str)
     def handle_file_error(self, error_message: str):
@@ -856,6 +861,7 @@ class SamplingApp(QtWidgets.QMainWindow):
             error_message (str): The error message describing what went wrong.
         """
         self.status_label.setText("")
+        self.status_label.setVisible(False)
         QtWidgets.QMessageBox.critical(
             self, self.t('error'), f"{self.t('file_loading_error')}: {error_message}")
 
@@ -870,6 +876,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         self.data_preprocessed, self.preprocessing_method_description = result
         self.preprocess_label.setVisible(True)
         self.status_label.setText("")
+        self.status_label.setVisible(False)
 
     @QtCore.Slot(str)
     def handle_preprocessing_error(self, error_message: str):
@@ -880,6 +887,7 @@ class SamplingApp(QtWidgets.QMainWindow):
             error_message (str): The error message describing what went wrong.
         """
         self.status_label.setText("")
+        self.status_label.setVisible(False)
         QtWidgets.QMessageBox.critical(
             self, self.t('error'), f"{self.t('error_processing_data')}: {error_message}")
 
@@ -903,6 +911,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         """
         self.create_button.setEnabled(True)
         self.status_label.setText("")
+        self.status_label.setVisible(False)
         self.progress_bar.setVisible(False)
         QtWidgets.QMessageBox.critical(
             self, self.t('error'), error_message)
@@ -918,6 +927,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         result, method_info, file_path, choice = result_tuple
         self.create_button.setEnabled(True)
         self.status_label.setText("")
+        self.status_label.setVisible(False)
         self.progress_bar.setVisible(False)
 
         try:
@@ -1048,6 +1058,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         """
         self.create_button.setEnabled(True)
         self.status_label.setText("")
+        self.status_label.setVisible(False)
         QtWidgets.QMessageBox.critical(
             self, self.t('error'), self.t('visualization_error') + ": " + error_message)
 
@@ -1067,6 +1078,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         """
         self.create_button.setEnabled(True)
         self.status_label.setText("")
+        self.status_label.setVisible(False)
 
         # Add UMAP visualization to chart_paths if applicable
         if choice in (5, 6, 7, 8, 9):
@@ -1097,6 +1109,7 @@ class SamplingApp(QtWidgets.QMainWindow):
             chart_paths,
             language='en'
         )
+        self.pdf_worker = pdf_worker
         pdf_thread = QtCore.QThread()
         pdf_worker.moveToThread(pdf_thread)
         pdf_thread.started.connect(pdf_worker.run)
@@ -1120,8 +1133,13 @@ class SamplingApp(QtWidgets.QMainWindow):
         """
         self.create_button.setEnabled(True)
         self.status_label.setText("")
-        message = f"{self.t('sample_saved_in_file')}:\n{self.pdf_worker.output_path}"
-        self.result_label.setText(message)
+        self.status_label.setVisible(False)  # Скрываем статус
+        try:
+            message = f"{self.t('sample_saved_in_file')}:\n{self.pdf_worker.output_path}"
+            self.result_label.setText(message)
+            self.result_label.setVisible(True)  # Делаем результат видимым
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, self.t('error'), str(e))
 
     @QtCore.Slot(str)
     def handle_pdf_error(self, error_message: str):
@@ -1133,6 +1151,7 @@ class SamplingApp(QtWidgets.QMainWindow):
         """
         self.create_button.setEnabled(True)
         self.status_label.setText("")
+        self.status_label.setVisible(False)
         QtWidgets.QMessageBox.critical(self, self.t('error'), error_message)
 
     def closeEvent(self, event):
