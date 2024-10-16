@@ -9,7 +9,7 @@ if not exist "%LOGDIR%" (
 )
 
 :: Log start time
-echo ===== Setup started at %date% %time% ===== >> %LOGFILE%
+echo ===== Program started at %date% %time% ===== >> %LOGFILE%
 
 :: Activate the virtual environment
 echo Activating virtual environment... >> %LOGFILE%
