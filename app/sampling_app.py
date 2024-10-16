@@ -89,6 +89,7 @@ class SamplingApp(QtWidgets.QMainWindow):
                 'error_title': "Помилка",
                 'file_loading_error': "Помилка при читанні файлу",
                 'visualization_error': "Помилка при створенні візуалізації",
+                'confirm': 'Підтвердити',
             },
             'en': {
                 'window_title': "Audit Sampling Creation",
@@ -126,6 +127,7 @@ class SamplingApp(QtWidgets.QMainWindow):
                 'error_title': "Error",
                 'file_loading_error': "Error reading file",
                 'visualization_error': "Error creating visualization",
+                'confirm': 'Confirm',
             },
         }
 
@@ -650,7 +652,7 @@ class SamplingApp(QtWidgets.QMainWindow):
             dialog_layout.addWidget(list_widget)
 
             # Use 'Browse' button to confirm selection
-            button = QtWidgets.QPushButton(self.t('browse'))
+            button = QtWidgets.QPushButton(self.t('confirm'))
             button.clicked.connect(dialog.accept)
             dialog_layout.addWidget(button)
 
